@@ -1,0 +1,36 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: telco_churn
+        description: >
+          Landing table loaded by etl/load.py. One row per customer.
+          Timestamp-free snapshot of the Feb-2020 IBM Telco sample.
+
+models:
+  - name: stg_telco_churn
+    description: Typed, snake_case staging view of the raw landing table.
+    columns:
+      - name: customer_id
+        description: Primary key (source customerID, e.g. '7590-VHVEG')
+        tests:
+          - unique
+          - not_null
+      - name: contract_type
+        tests:
+          - accepted_values:
+              values: ["month-to-month", "one year", "two year"]
+      - name: internet_service
+        tests:
+          - accepted_values:
+              values: ["dsl", "fiber optic", "no"]
+      - name: churned
+        tests:
+          - accepted_values:
+              values: ["yes", "no"]
+      - name: gender
+        tests:
+          - accepted_values:
+              values: ["male", "female"]

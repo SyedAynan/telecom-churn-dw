@@ -2,8 +2,9 @@
 
 Fixes the known quirks of the Telco churn dataset:
 - TotalCharges arrives as a string, with ' ' (blank) for 11 customers with
-  tenure 0 — coerced to float, blanks become NaN then 0.0 (no tenure yet,
-  so no charges yet: a defensible business rule, documented here).
+  tenure 0 — coerced to float; blanks stay NULL here and the dbt staging
+  layer applies the business rule (total_charges = 0 for tenure 0) with a
+  test guarding it. ETL types; the warehouse owns business logic.
 - Yes/No columns are standardized to lowercase 'yes'/'no'.
 - 'No phone service' / 'No internet service' values are kept verbatim in the
   service columns at the ETL layer; the dbt staging layer later collapses
@@ -38,10 +39,9 @@ def transform() -> pd.DataFrame:
     df = pd.read_csv(RAW_CSV_PATH, dtype={"TotalCharges": "string"})
     n_raw = len(df)
 
-    # --- TotalCharges: string with blanks -> float -----------------------
+    # --- TotalCharges: string with blanks -> float (NULLs preserved) -----
     blanks = (df["TotalCharges"].str.strip() == "").sum()
     df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
-    df["TotalCharges"] = df["TotalCharges"].fillna(0.0)
 
     # --- standardize yes/no columns to lowercase --------------------------
     for col in BOOL_LIKE_COLUMNS:
@@ -58,7 +58,9 @@ def transform() -> pd.DataFrame:
     assert df["customerID"].is_unique, "customerID must be unique"
     assert df["tenure"].between(0, 72).all(), "tenure must be 0-72 months"
     assert df["MonthlyCharges"].ge(0).all()
-    assert df["TotalCharges"].ge(0).all()
+    assert df["TotalCharges"].dropna().ge(0).all()
+    # the 11 known blanks: all should be tenure-0 customers
+    assert (df.loc[df["TotalCharges"].isna(), "tenure"] == 0).all()
 
     CLEAN_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(CLEAN_PARQUET_PATH, index=False)

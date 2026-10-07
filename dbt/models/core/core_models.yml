@@ -1,0 +1,77 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Monthly date spine 2014-02..2020-02, one row per month.
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: dim_contract
+    description: One row per contract type (3 rows).
+    columns:
+      - name: contract_key
+        description: Natural key — contract type string.
+        tests: [unique, not_null]
+
+  - name: dim_payment_method
+    description: One row per payment method (4 rows).
+    columns:
+      - name: payment_method_key
+        description: Natural key — payment method string.
+        tests: [unique, not_null]
+
+  - name: dim_service
+    description: One row per subscribable service (10 rows).
+    columns:
+      - name: service_key
+        tests: [unique, not_null]
+      - name: service_name
+        tests: [unique, not_null]
+
+  - name: fact_customer
+    description: One row per customer — measures, churn flag, FKs to dims.
+    columns:
+      - name: customer_id
+        description: Primary key.
+        tests: [unique, not_null]
+      - name: contract_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_contract')
+                field: contract_key
+      - name: payment_method_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_payment_method')
+                field: payment_method_key
+      - name: start_month_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+
+  - name: fact_customer_services
+    description: Service bridge — one row per (customer, service).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [customer_id, service_key]
+    columns:
+      - name: customer_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('fact_customer')
+                field: customer_id
+          - not_null
+      - name: service_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_service')
+                field: service_key
+          - not_null

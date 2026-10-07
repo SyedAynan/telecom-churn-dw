@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: mart_customer_360
+    description: One row per customer with dims joined and service counts.
+    columns:
+      - name: customer_id
+        description: Primary key.
+        tests: [unique, not_null]
+      - name: tenure_bucket
+        tests:
+          - accepted_values:
+              values: ['0-12', '13-24', '25-48', '49-72']
+      - name: monthly_charge_band
+        tests:
+          - accepted_values:
+              values: ['a. < 35', 'b. 35-59.99', 'c. 60-84.99', 'd. >= 85']
+      - name: contract_label
+        tests:
+          - accepted_values:
+              values: ['Month-to-month', 'One year', 'Two year']
+
+  - name: mart_churn_summary
+    description: Churn rate by segment (contract, payment, tenure, charge band).
+    columns:
+      - name: segment_type
+        tests:
+          - accepted_values:
+              values: ['contract', 'payment_method', 'tenure_bucket', 'monthly_charge_band']
+      - name: segment_label
+        tests: [not_null]
