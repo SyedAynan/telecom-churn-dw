@@ -1,0 +1,29 @@
+[project]
+name = "telecom-churn-dw"
+version = "0.1.0"
+description = "Telecom churn data warehouse: ETL → DuckDB star schema (dbt) → churn model → Streamlit watchlist"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "dbt-core>=1.9",
+    "dbt-duckdb>=1.9",
+    "scikit-learn>=1.5",
+    "joblib>=1.4",
+    "streamlit>=1.40",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+# Script-style project: run via `uv run python -m etl.extract`, not installed as a package.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
