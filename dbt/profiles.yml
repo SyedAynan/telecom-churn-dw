@@ -1,0 +1,10 @@
+telecom_churn_dw:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # resolved relative to the invocation cwd — always run dbt from the
+      # project root (the Makefile enforces this)
+      path: warehouse/telecom_churn.duckdb
+      schema: raw
+      threads: 4
