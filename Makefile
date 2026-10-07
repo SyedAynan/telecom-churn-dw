@@ -41,7 +41,7 @@ score:
 	$(PY) ml.score
 
 dashboard:
-	uv run python -m streamlit run app/dashboard.py
+	SMTP= SMTP_EMAIL= uv run python -m streamlit run app/dashboard.py --server.headless=true
 
 test:
 	uv run pytest -v
