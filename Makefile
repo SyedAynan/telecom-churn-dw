@@ -41,7 +41,7 @@ score:
 	$(PY) ml.score
 
 dashboard:
-	uv run streamlit run app/dashboard.py
+	uv run python -m streamlit run app/dashboard.py
 
 test:
 	uv run pytest -v
