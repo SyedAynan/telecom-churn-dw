@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 PY := uv run python -m
-DBT := uv run dbt --project-dir dbt --profiles-dir dbt
+DBT := uv run dbt
 
 .PHONY: help extract transform load etl dbt-build dbt-test train score dashboard test all clean
 
@@ -29,10 +29,10 @@ load:
 etl: extract transform load
 
 dbt-build:
-	$(DBT) build
+	$(DBT) build --project-dir dbt --profiles-dir dbt
 
 dbt-test:
-	$(DBT) test
+	$(DBT) test --project-dir dbt --profiles-dir dbt
 
 train:
 	$(PY) ml.train
