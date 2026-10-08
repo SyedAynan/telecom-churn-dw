@@ -44,7 +44,7 @@ dashboard:
 	SMTP= SMTP_EMAIL= uv run python -m streamlit run app/dashboard.py --server.headless=true
 
 test:
-	uv run pytest -v
+	uv run python -m pytest -v
 
 all: etl dbt-build train score
 
