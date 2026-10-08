@@ -1,10 +1,10 @@
-"""Streamlit dashboard for the Telecom Churn Data Warehouse.
+"""Streamlit dashboard for the Telecom Churn Data Warehouse — motion edition.
 
-Reads marts from warehouse/telecom_churn.duckdb — the dashboard is a view
-over the warehouse, never a side-channel. Three pages: Overview, Watchlist,
-Factors. Charts are custom HTML/SVG (app/charts.py) built to the dataviz
-spec; everything carries a table view or direct labels so no value is
-gated behind hover.
+Reads marts from warehouse/telecom_churn.duckdb (dashboard is a view over
+the warehouse, never a side-channel). Three pages: Overview, Watchlist,
+Factors. Charts are responsive animated SVG (app/charts.py); page chrome
+is animated via app/motion.py. Every value stays reachable without hover
+(direct labels + table views); reduced-motion is respected throughout.
 """
 from __future__ import annotations
 
@@ -18,7 +18,8 @@ import streamlit.components.v1 as components
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.charts import coefficient_chart, hbar_chart, risk_meter, style_kpi  # noqa: E402
+from app.charts import chart_height, coefficient_chart, hbar_chart  # noqa: E402
+from app.motion import PAGE_CSS, kpi_tile  # noqa: E402
 from etl.paths import DB_PATH, MODELS_DIR  # noqa: E402
 
 st.set_page_config(
@@ -27,6 +28,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
 TITLE = "Telecom Churn Data Warehouse"
 
@@ -82,6 +85,13 @@ def fmt_pct(x: float) -> str:
     return f"{100 * x:.1f}%"
 
 
+def tenure_trend(df: pd.DataFrame) -> list[float]:
+    """Churn rate by ordered tenure bucket — the KPI sparkline series."""
+    ordered = ["0-12", "13-24", "25-48", "49-72"]
+    grouped = df.groupby("tenure_bucket")["churned"].mean()
+    return [float(grouped.get(b, 0.0)) for b in ordered]
+
+
 # ==================================================================== pages
 if page == "Overview":
     st.title("Churn overview")
@@ -89,26 +99,59 @@ if page == "Overview":
 
     overall = base["churned"].mean()
     n_high = int((base["risk_band"] == "high").sum())
+    top_line = (base["churned"] * base["monthly_charges"]).sum()
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        components.html(style_kpi("Overall churn rate", fmt_pct(overall)), height=78)
+        components.html(
+            kpi_tile("Overall churn rate", fmt_pct(overall),
+                     spark=tenure_trend(base), accent="blue"),
+            height=118,
+        )
     with c2:
         components.html(
-            style_kpi("Churned customers", f"{int(base.churned.sum()):,}"), height=78
+            kpi_tile("Churned customers", f"{int(base.churned.sum()):,}",
+                     accent="orange"),
+            height=118,
         )
     with c3:
         components.html(
-            style_kpi(
-                "High-risk watchlist", f"{n_high}",
-                delta="model p ≥ 75%", delta_good=False,
-            ),
-            height=78,
+            kpi_tile("High-risk watchlist", f"{n_high}",
+                     delta="model p ≥ 75%", delta_good=False, accent="red"),
+            height=118,
         )
     with c4:
         components.html(
-            style_kpi("Avg monthly revenue", f"${base.monthly_charges.mean():.2f}"), height=78
+            kpi_tile("Monthly revenue at risk", f"${top_line:,.0f}",
+                     accent="blue"),
+            height=118,
         )
+
+    # ---- live ticker: segment highlights --------------------------------
+    tick_items: list[str] = []
+    for seg_type in [
+        "contract", "tenure_bucket",
+        "payment_method", "monthly_charge_band",
+    ]:
+        s = seg(summary, seg_type)
+        worst = s.loc[s.churn_rate.idxmax()]
+        tick_items.append(f"{worst.segment_label} — {fmt_pct(worst.churn_rate)} churn")
+    ticker_html = (
+        '<div style="overflow:hidden;white-space:nowrap;font-family:'
+        "'Space Grotesk',system-ui,sans-serif;font-size:12.5px;color:#52514e;"
+        'border-top:1px solid rgba(11,11,11,.08);border-bottom:1px solid '
+        'rgba(11,11,11,.08);padding:7px 0;margin:10px 0 4px">'
+        '<div class="ticker-track" style="display:inline-block;animation:slide 26s '
+        'linear infinite">'
+        + "&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;".join(
+            f'<span class="ticker-item">{i}</span>' for i in (tick_items * 3)
+        )
+        + '</div><style>@keyframes slide{from{transform:translateX(0)}'
+        "to{transform:translateX(-33.3%)}}"
+        "@media (prefers-reduced-motion: reduce){.ticker-track{animation:none}}"
+        "</style></div>"
+    )
+    components.html(ticker_html, height=36)
 
     st.divider()
 
@@ -123,7 +166,7 @@ if page == "Overview":
                 subtitle="Month-to-month churns 15× more than two-year",
                 color_slot=0,
             ),
-            height=170,
+            height=chart_height(len(s), True),
         )
         s = seg(summary, "tenure_bucket")
         components.html(
@@ -134,7 +177,7 @@ if page == "Overview":
                 subtitle="Risk halves every year of tenure",
                 color_slot=1,
             ),
-            height=170,
+            height=chart_height(len(s), True),
         )
     with right:
         s = seg(summary, "payment_method")
@@ -146,7 +189,7 @@ if page == "Overview":
                 subtitle="Manual payment methods churn ~3× automatic",
                 color_slot=0,
             ),
-            height=170,
+            height=chart_height(len(s), True),
         )
         s = seg(summary, "monthly_charge_band")
         components.html(
@@ -157,7 +200,7 @@ if page == "Overview":
                 subtitle="Heavier monthly bills, heavier churn",
                 color_slot=1,
             ),
-            height=170,
+            height=chart_height(len(s), True),
         )
 
     with st.expander("Table view — full churn summary (all segments)"):
@@ -275,7 +318,7 @@ else:  # Factors
             [coefs[i] for i in order],
             subtitle="Sign = direction of churn risk · magnitude = strength",
         ),
-        height=460,
+        height=chart_height(len(order), True),
     )
 
     st.divider()
@@ -297,7 +340,7 @@ else:  # Factors
             subtitle="Count of watchlist customers by dominant risk factor",
             color_slot=0,
         ),
-        height=240,
+        height=chart_height(len(reason_counts), True),
     )
 
     st.markdown("#### Read the coefficients as odds ratios")

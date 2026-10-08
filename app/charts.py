@@ -1,34 +1,296 @@
-"""HTML/SVG chart components for the Streamlit dashboard.
+"""Responsive animated HTML/SVG charts for the Streamlit dashboard.
 
-Hand-built per the dataviz method: thin bars (<=24px), 4px rounded data-ends
-(square at baseline), 2px surface gaps between adjacent marks, hairline solid
-grids, per-mark hover tooltips, selective direct labels, text in ink tokens
-(never series colors), one validated palette for light+dark via
-prefers-color-scheme.
+Layout is JS-driven: each chart measures its container and re-renders on
+resize, so marks never clip and text never scales out of spec. Entrance
+animations (staggered bar growth) and hover micro-interactions are chrome
+only — the dataviz contract is preserved: validated palette slots, thin
+marks (22px) with 4px rounded data-ends, hairline solid grids, per-mark
+tooltips with keyboard parity, selective direct labels, text in ink
+tokens, and dark mode via prefers-color-scheme (color lives in CSS
+classes, so no JS color swapping).
 """
 from __future__ import annotations
 
 import html
+import itertools
+import json
+from string import Template
 from typing import Sequence
 
-# validated 3-slot categorical (light | dark) — adjacency-safe for bars
-SERIES = [("#2a78d6", "#3987e5"), ("#eb6834", "#d95926"), ("#1baf7a", "#199e70")]
-INK = {"primary": ("#0b0b0b", "#ffffff"), "secondary": ("#52514e", "#c3c2b7"),
-       "muted": ("#898781", "#898781")}
-GRID = ("#e1e0d9", "#2c2c2a")
-SURFACE = ("#fcfcfb", "#1a1a19")
-STATUS = {"critical": ("#d03b3b", "#e66767"), "warning": ("#eda100", "#c98500"),
-          "good": ("#0ca30c", "#0ca30c")}
+_ids = itertools.count(1)
+
+_FONTS = (
+    '<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:'
+    'wght@500;600;700&display=swap" rel="stylesheet">'
+)
+
+_CSS = """
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: transparent; }
+.viz-root { position: relative; font-family: 'Space Grotesk', system-ui,
+  -apple-system, 'Segoe UI', sans-serif; padding: 16px 14px 10px;
+  animation: rise .5s cubic-bezier(.22,1,.36,1) backwards; }
+.viz-root .title { font-size: 14px; font-weight: 700; color: #0b0b0b; }
+.viz-root .sub { font-size: 12px; color: #898781; margin: 3px 0 12px; }
+svg { display: block; }
+text.cat { font-size: 12.5px; fill: #52514e; }
+text.val { font-size: 12.5px; fill: #0b0b0b; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: fadein .45s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 90ms + .55s); }
+rect.track { fill: #eceae4; opacity: .55; }
+rect.fill { fill: var(--s); transform-box: fill-box;
+  transform-origin: left center;
+  animation: grow .7s cubic-bezier(.22,1,.36,1) backwards;
+  animation-delay: calc(var(--i, 0) * 90ms);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), filter .2s; }
+rect.fill.neg { transform-origin: right center; }
+.bar-row { cursor: default; }
+.bar-row:hover text.cat, .bar-row:focus-visible text.cat { fill: #0b0b0b; }
+.bar-row:hover rect.fill, .bar-row:focus-visible rect.fill {
+  transform: scaleY(1.07); filter: brightness(1.06); }
+.bar-row:focus { outline: none; }
+.line-zero { stroke: #e1e0d9; stroke-width: 1; }
+.slot-1 { --s: #2a78d6; --sd: #3987e5; }
+.slot-2 { --s: #eb6834; --sd: #d95926; }
+.slot-3 { --s: #1baf7a; --sd: #199e70; }
+rect.fill.dim { fill: #b9b8b1; }
+.chart-coef rect.fill.pos { fill: #eb6834; }
+.chart-coef rect.fill.neg { fill: #2a78d6; }
+.tip { position: absolute; pointer-events: none; background: #fcfcfb;
+  color: #0b0b0b; border: 1px solid rgba(11,11,11,.10); border-radius: 8px;
+  padding: 6px 10px; font-size: 12px; display: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,.14); white-space: nowrap; z-index: 5; }
+.tip b { font-weight: 700; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes grow { from { transform: scaleX(0); } }
+@keyframes fadein { from { opacity: 0; } }
+@media (prefers-color-scheme: dark) {
+  .viz-root .title { color: #ffffff; }
+  text.cat { fill: #c3c2b7; }
+  text.val { fill: #ffffff; }
+  rect.track { fill: #26262a; opacity: .9; }
+  rect.fill { fill: var(--sd); }
+  rect.fill.dim { fill: #4a4a48; }
+  .chart-coef rect.fill.pos { fill: #d95926; }
+  .chart-coef rect.fill.neg { fill: #3987e5; }
+  .line-zero { stroke: #2c2c2a; }
+  .tip { background: #262625; color: #ffffff;
+    border-color: rgba(255,255,255,.14); }
+}
+"""
+
+_JS_HBAR = """
+(function () {
+  var root = document.currentScript.closest('.viz-root');
+  var data = JSON.parse(document.getElementById(root.getAttribute('data-src')).textContent);
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = root.querySelector('svg');
+  var tip = root.querySelector('.tip');
+
+  function E(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) { e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function build() {
+    var W = Math.max(340, root.clientWidth - 28);
+    var gut = Math.min(190, Math.max(118, W * 0.22));
+    var vw = 80;
+    var pw = Math.max(80, W - gut - vw - 8);
+    var rowH = 34, top = 10, n = data.cats.length;
+    var H = n * rowH + top + 4;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', H);
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    var vmax = Math.max.apply(null, data.vals.concat([1e-9]));
+    for (var i = 0; i < n; i++) {
+      var g = E('g', { 'class': 'bar-row', 'tabindex': 0 });
+      g.setAttribute('data-cat', data.cats[i]);
+      g.setAttribute('data-val', data.fvals[i]);
+      g.style.setProperty('--i', i);
+      var y = top + i * rowH;
+      var by = y + rowH / 2 - 11;
+      var t = E('text', { 'class': 'cat', 'text-anchor': 'end',
+        x: gut - 10, y: y + rowH / 2 + 4 });
+      t.textContent = data.cats[i];
+      g.appendChild(t);
+      g.appendChild(E('rect', { 'class': 'track', x: gut, y: by,
+        width: pw, height: 22, rx: 4 }));
+      var bw = Math.max(2, data.vals[i] / vmax * pw);
+      var cls = 'fill' + (data.hl && data.vals[i] < vmax ? ' dim' : '');
+      g.appendChild(E('rect', { 'class': cls, x: gut, y: by,
+        width: bw.toFixed(1), height: 22, rx: 4 }));
+      var v = E('text', { 'class': 'val',
+        x: (gut + bw + 8).toFixed(1), y: y + rowH / 2 + 4 });
+      v.textContent = data.fvals[i];
+      g.appendChild(v);
+      svg.appendChild(g);
+    }
+  }
+
+  build();
+  var rt = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(rt);
+    rt = setTimeout(build, 160);
+  });
+
+  function show(row) {
+    tip.textContent = '';
+    var b1 = document.createElement('b');
+    b1.textContent = row.getAttribute('data-cat');
+    var b2 = document.createElement('b');
+    b2.textContent = row.getAttribute('data-val');
+    tip.appendChild(b1);
+    tip.appendChild(document.createTextNode(' — '));
+    tip.appendChild(b2);
+    tip.style.display = 'block';
+    var rg = root.getBoundingClientRect(), gg = row.getBoundingClientRect();
+    tip.style.left = Math.max(4, Math.min(rg.width - 150,
+      gg.left - rg.left + 6)) + 'px';
+    tip.style.top = Math.max(2, gg.top - rg.top - 32) + 'px';
+  }
+  root.addEventListener('pointerover', function (e) {
+    var r = e.target.closest('.bar-row');
+    if (r) { show(r); }
+  });
+  root.addEventListener('pointerout', function (e) {
+    if (e.target.closest('.bar-row')) { tip.style.display = 'none'; }
+  });
+  root.addEventListener('focusin', function (e) {
+    var r = e.target.closest('.bar-row');
+    if (r) { show(r); }
+  });
+  root.addEventListener('focusout', function () { tip.style.display = 'none'; });
+})();
+"""
+
+_JS_COEF = """
+(function () {
+  var root = document.currentScript.closest('.viz-root');
+  var data = JSON.parse(document.getElementById(root.getAttribute('data-src')).textContent);
+  var NS = 'http://www.w3.org/2000/svg';
+  var svg = root.querySelector('svg');
+  var tip = root.querySelector('.tip');
+
+  function E(tag, attrs) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) { e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  function build() {
+    var W = Math.max(380, root.clientWidth - 28);
+    var gut = Math.min(230, Math.max(132, W * 0.30));
+    var vw = 64;
+    var pw = Math.max(120, W - gut - vw - 8);
+    var mid = gut + pw / 2;
+    var rowH = 34, top = 10, n = data.cats.length;
+    var H = n * rowH + top + 4;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', H);
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    var vmax = Math.max.apply(null, data.coefs.map(Math.abs).concat([1e-9]));
+    for (var i = 0; i < n; i++) {
+      var c = data.coefs[i];
+      var g = E('g', { 'class': 'bar-row', 'tabindex': 0 });
+      g.setAttribute('data-cat', data.cats[i]);
+      g.setAttribute('data-val', data.fvals[i]);
+      g.style.setProperty('--i', i);
+      var y = top + i * rowH;
+      var by = y + rowH / 2 - 11;
+      var t = E('text', { 'class': 'cat', 'text-anchor': 'end',
+        x: gut - 10, y: y + rowH / 2 + 4 });
+      t.textContent = data.cats[i];
+      g.appendChild(t);
+      g.appendChild(E('line', { 'class': 'line-zero', x1: mid, y1: y + 3,
+        x2: mid, y2: y + rowH - 3 }));
+      var w = Math.max(2, Math.abs(c) / vmax * (pw / 2 - 8));
+      var x = c >= 0 ? mid : mid - w;
+      var cls = c >= 0 ? 'fill pos' : 'fill neg';
+      g.appendChild(E('rect', { 'class': cls, x: x.toFixed(1), y: by,
+        width: w.toFixed(1), height: 22, rx: 4 }));
+      var vx = c >= 0 ? mid + w + 8 : mid - w - 8;
+      var anchor = c >= 0 ? 'start' : 'end';
+      var v = E('text', { 'class': 'val', 'text-anchor': anchor,
+        x: vx.toFixed(1), y: y + rowH / 2 + 4 });
+      v.textContent = data.fvals[i];
+      g.appendChild(v);
+      svg.appendChild(g);
+    }
+  }
+
+  build();
+  var rt = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(rt);
+    rt = setTimeout(build, 160);
+  });
+
+  function show(row) {
+    tip.textContent = '';
+    var b1 = document.createElement('b');
+    b1.textContent = row.getAttribute('data-cat');
+    var b2 = document.createElement('b');
+    b2.textContent = row.getAttribute('data-val');
+    tip.appendChild(b1);
+    tip.appendChild(document.createTextNode(' — '));
+    tip.appendChild(b2);
+    tip.style.display = 'block';
+    var rg = root.getBoundingClientRect(), gg = row.getBoundingClientRect();
+    tip.style.left = Math.max(4, Math.min(rg.width - 150,
+      gg.left - rg.left + 6)) + 'px';
+    tip.style.top = Math.max(2, gg.top - rg.top - 32) + 'px';
+  }
+  root.addEventListener('pointerover', function (e) {
+    var r = e.target.closest('.bar-row');
+    if (r) { show(r); }
+  });
+  root.addEventListener('pointerout', function (e) {
+    if (e.target.closest('.bar-row')) { tip.style.display = 'none'; }
+  });
+  root.addEventListener('focusin', function (e) {
+    var r = e.target.closest('.bar-row');
+    if (r) { show(r); }
+  });
+  root.addEventListener('focusout', function () { tip.style.display = 'none'; });
+})();
+"""
+
+_TMPL = Template(
+    """<!DOCTYPE html><html><head>
+$fonts
+<style>$css</style></head>
+<body>
+<div class="viz-root $rclass $slotcls" data-src="$src" data-root>
+  <div class="title">$title</div>
+  $subhtml
+  <svg role="img" aria-label="$aria"></svg>
+  <div class="tip"></div>
+</div>
+<script type="application/json" id="$src">$json</script>
+<script>$js</script>
+</body></html>"""
+)
 
 
-def _mode_css() -> str:
-    light, dark = SURFACE
-    return f"""
-    .viz-root {{ color-scheme: light dark; background: {light}; color: {INK['primary'][0]};
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }}
-    @media (prefers-color-scheme: dark) {{ .viz-root {{ background: {dark};
-        color: {INK['primary'][1]}; }} }}
-    """
+def _render(uid, data, title, subtitle, *, rclass, slotcls, js, aria):
+    j = json.dumps(data).replace("</", "<\\/")
+    sub = f'<div class="sub">{html.escape(subtitle)}</div>' if subtitle else ""
+    return _TMPL.substitute(
+        fonts=_FONTS, css=_CSS, rclass=rclass, slotcls=slotcls, src=uid,
+        title=html.escape(title), subhtml=sub, aria=html.escape(aria),
+        json=j, js=js,
+    )
+
+
+def chart_height(n_rows: int, has_subtitle: bool = False) -> int:
+    """Pixel height for a components.html slot holding an n-row chart."""
+    return n_rows * 34 + 84 + (36 if has_subtitle else 0)
 
 
 def hbar_chart(
@@ -37,130 +299,30 @@ def hbar_chart(
     values: Sequence[float],
     *,
     value_fmt: str = "{:.1%}",
-    width: int = 760,
-    row_h: int = 34,
     color_slot: int = 0,
     highlight_max: bool = True,
     subtitle: str = "",
 ) -> str:
     """Horizontal bar chart — one series, magnitude comparison.
 
-    Bars <=24px, 4px rounded data-end, value labels at bar tips (ink color),
-    per-bar hover tooltip + lift, hairline grid. highlight_max keeps the
-    maximum bar in the series hue and de-emphasizes the rest toward gray
-    (emphasis form) — pass False for uniform slot-1 coloring.
+    Bars <=24px with 4px rounded data-ends, staggered grow-in animation,
+    value labels at bar tips (ink color), per-bar hover tooltip + lift,
+    hairline track. highlight_max keeps the maximum bar in the series hue
+    and de-emphasizes the rest toward gray (emphasis form); False = uniform
+    slot coloring.
     """
-    n = len(categories)
-    chart_h = n * row_h + 30
-    vmax = max(values) if max(values) > 0 else 1.0
-    plot_w = width - 150 - 70  # label gutter left, value labels right
-
-    light, dark = SERIES[color_slot]
-    hl_light, hl_dark = SERIES[color_slot]
-    dim_light, dim_dark = "#b9b8b1", "#4a4a48"
-
-    rows = []
-    for i, (cat, val) in enumerate(zip(categories, values)):
-        y = 8 + i * row_h
-        bar_w = max(2.0, val / vmax * plot_w)
-        emphasized = (not highlight_max) or (val == vmax)
-        fill = hl_light if emphasized else dim_light
-        fill_d = hl_dark if emphasized else dim_dark
-        label = html.escape(str(cat))
-        vtxt = value_fmt.format(val)
-        rows.append(f"""
-        <g class="bar-row" tabindex="0" data-cat="{label}" data-val="{vtxt}"
-           style="cursor:default">
-          <text x="146" y="{y + row_h / 2 + 4}" text-anchor="end"
-                class="cat" fill="{INK['secondary'][0]}">{label}</text>
-          <rect class="track" x="150" y="{y + row_h / 2 - 11}" width="{plot_w}"
-                height="22" rx="4" fill="{GRID[0]}" opacity="0.35"/>
-          <rect class="fill" x="150" y="{y + row_h / 2 - 11}" width="{bar_w:.1f}"
-                height="22" rx="4" data-fill-l="{fill}" data-fill-d="{fill_d}"
-                fill="{fill}"/>
-          <text class="val" x="{150 + bar_w + 8:.1f}" y="{y + row_h / 2 + 4}"
-                fill="{INK['primary'][0]}" font-weight="600">{vtxt}</text>
-        </g>""")
-
-    sub = f'<div class="sub">{html.escape(subtitle)}</div>' if subtitle else ""
-    return f"""<!DOCTYPE html>
-<html><head><style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:transparent; }}
-  .viz-root {{ padding:16px 12px 8px; }}
-  .title {{ font-size:14px; font-weight:600; color:{INK['primary'][0]}; margin-bottom:2px; }}
-  .sub {{ font-size:12px; color:{INK['muted'][0]}; margin-bottom:10px; }}
-  .cat {{ font-size:12.5px; }}
-  .val {{ font-size:12.5px; }}
-  .bar-row:focus, .bar-row:hover .fill {{ filter: brightness(1.08); }}
-  .bar-row:hover .cat, .bar-row:focus .cat {{ fill:{INK['primary'][0]}; }}
-  .tip {{ position:absolute; pointer-events:none; background:{SURFACE[1]};
-    color:{INK['primary'][1]}; border:1px solid rgba(255,255,255,.14);
-    border-radius:6px; padding:6px 10px; font-size:12px; display:none;
-    box-shadow:0 4px 14px rgba(0,0,0,.25); white-space:nowrap; z-index:5; }}
-  .tip .t-strong {{ font-weight:600; }}
-  svg {{ display:block; }}
-  @media (prefers-color-scheme: dark) {{
-    .viz-root {{ color:{INK['primary'][1]}; }}
-    .title {{ color:{INK['primary'][1]}; }}
-    .sub {{ color:{INK['muted'][1]}; }}
-    .cat {{ fill:{INK['secondary'][1]}; }}
-    .val {{ fill:{INK['primary'][1]}; }}
-    .bar-row:hover .cat, .bar-row:focus .cat {{ fill:{INK['primary'][1]}; }}
-    .bar-row .fill {{ fill: attr(data-fill-d); }}
-    .tip {{ background:#26262
-    5; }}
-  }}
-  /* fill swap via JS (attr() not supported in < media queries on Chrome) */
-</style></head>
-<body><div class="viz-root" style="position:relative">
-  <div class="title">{html.escape(title)}</div>{sub}
-  <svg width="{width}" height="{chart_h}" role="img"
-       aria-label="{html.escape(title)} bar chart">
-    <g class="bars">{''.join(rows)}</g>
-  </svg>
-  <div class="tip"></div>
-</div>
-<script>
-(function() {{
-  const root = document.currentScript.closest('.viz-root');
-  if (!root) return;
-  const mq = window.matchMedia('(prefers-color-scheme: dark)');
-  const fills = root.querySelectorAll('rect.fill');
-  function apply(mode) {{
-    root.querySelectorAll('rect.track').forEach(r => {{
-      r.setAttribute('fill', mode ? '{GRID[1]}' : '{GRID[0]}');
-      r.setAttribute('opacity', '0.5');
-    }});
-    fills.forEach(r => {{
-      r.setAttribute('fill', mode ? r.dataset.fillD : r.dataset.fillL);
-    }});
-    root.querySelectorAll('text.cat').forEach(t => t.setAttribute('fill', mode ? '{INK['secondary'][1]}' : '{INK['secondary'][0]}'));
-    root.querySelectorAll('text.val').forEach(t => t.setAttribute('fill', mode ? '{INK['primary'][1]}' : '{INK['primary'][0]}'));
-    const tip = root.querySelector('.tip');
-    tip.style.background = mode ? '#262625' : '{SURFACE[0]}';
-    tip.style.color = mode ? '{INK['primary'][1]}' : '{INK['primary'][0]}';
-    tip.style.borderColor = mode ? 'rgba(255,255,255,.14)' : 'rgba(11,11,11,.10)';
-  }}
-  apply(mq.matches);
-  mq.addEventListener ? mq.addEventListener('change', e => apply(e.matches)) : mq.addListener(e => apply(e.matches));
-  const tip = root.querySelector('.tip');
-  root.querySelectorAll('.bar-row').forEach(g => {{
-    const show = () => {{
-      tip.innerHTML = '<span class="t-strong">' + g.dataset.cat + '</span> — '
-        + '<span class="t-strong">' + g.dataset.val + '</span>';
-      tip.style.display = 'block';
-      const rg = root.getBoundingClientRect(), gg = g.getBoundingClientRect();
-      tip.style.left = Math.max(4, Math.min(rg.width - 120, gg.left - rg.left + 8)) + 'px';
-      tip.style.top = (gg.top - rg.top - 34) + 'px';
-    }};
-    g.addEventListener('pointerenter', show);
-    g.addEventListener('focus', show);
-    g.addEventListener('pointerleave', () => tip.style.display = 'none');
-    g.addEventListener('blur', () => tip.style.display = 'none');
-  }});
-}})();
-</script></body></html>"""
+    uid = f"vd{next(_ids)}"
+    data = {
+        "cats": [str(c) for c in categories],
+        "vals": [float(v) for v in values],
+        "fvals": [value_fmt.format(float(v)) for v in values],
+        "hl": bool(highlight_max),
+    }
+    return _render(
+        uid, data, title, subtitle,
+        rclass="chart-hbar", slotcls=f"slot-{color_slot + 1}",
+        js=_JS_HBAR, aria=f"{title} — horizontal bar chart",
+    )
 
 
 def coefficient_chart(
@@ -168,138 +330,22 @@ def coefficient_chart(
     features: Sequence[str],
     coefs: Sequence[float],
     *,
-    width: int = 760,
-    row_h: int = 34,
     subtitle: str = "",
 ) -> str:
     """Diverging horizontal bar chart of model coefficients (polarity job).
 
-    Positive (churn-up) bars in orange, negative (protective) in blue — the
-    validated warm/cool pair with gray midpoint at zero. Diverging form, not
-    a value ramp on nominal categories.
+    Churn-up bars in orange, protective in blue — the validated warm/cool
+    pair with the zero line as neutral midpoint. Bars grow outward from
+    the zero line on entrance.
     """
-    n = len(features)
-    chart_h = n * row_h + 30
-    vmax = max(abs(c) for c in coefs)
-    plot_w = width - 230 - 60  # long feature labels left, values right
-    mid = 110 + plot_w / 2
-
-    rows = []
-    for i, (feat, coef) in enumerate(zip(features, coefs)):
-        y = 8 + i * row_h
-        w = abs(coef) / vmax * (plot_w / 2 - 6)
-        x = mid if coef >= 0 else mid - w
-        fill_l = "#eb6834" if coef >= 0 else "#2a78d6"
-        fill_d = "#d95926" if coef >= 0 else "#3987e5"
-        vtxt = f"{coef:+.2f}"
-        rows.append(f"""
-        <g class="bar-row" tabindex="0" data-cat="{html.escape(feat)}" data-val="{vtxt}">
-          <text x="{mid - plot_w / 2 - 8}" y="{y + row_h / 2 + 4}" text-anchor="end"
-                class="cat" fill="{INK['secondary'][0]}">{html.escape(feat)}</text>
-          <line x1="{mid}" y1="{y + 4}" x2="{mid}" y2="{y + row_h - 4}"
-                stroke="{GRID[0]}" stroke-width="1"/>
-          <rect class="fill" x="{x:.1f}" y="{y + row_h / 2 - 11}" width="{w:.1f}"
-                height="22" rx="4" data-fill-l="{fill_l}" data-fill-d="{fill_d}"
-                fill="{fill_l}"/>
-          <text class="val" x="{(mid + w + 8) if coef >= 0 else (mid - w - 8):.1f}"
-                y="{y + row_h / 2 + 4}"
-                text-anchor="{'start' if coef >= 0 else 'end'}"
-                fill="{INK['primary'][0]}" font-weight="600">{vtxt}</text>
-        </g>""")
-
-    sub = f'<div class="sub">{html.escape(subtitle)}</div>' if subtitle else ""
-    return f"""<!DOCTYPE html>
-<html><head><style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:transparent; }}
-  .viz-root {{ padding:16px 12px 8px; }}
-  .title {{ font-size:14px; font-weight:600; color:{INK['primary'][0]}; }}
-  .sub {{ font-size:12px; color:{INK['muted'][0]}; margin-bottom:10px; }}
-  .cat, .val {{ font-size:12.5px; }}
-  .bar-row:hover .fill {{ filter: brightness(1.08); }}
-  .tip {{ position:absolute; pointer-events:none; background:{SURFACE[0]};
-    color:{INK['primary'][0]}; border:1px solid rgba(11,11,11,.10); border-radius:6px;
-    padding:6px 10px; font-size:12px; display:none; box-shadow:0 4px 14px rgba(0,0,0,.15);
-    white-space:nowrap; z-index:5; }}
-  svg {{ display:block; }}
-</style></head>
-<body><div class="viz-root" style="position:relative">
-  <div class="title">{html.escape(title)}</div>{sub}
-  <svg width="{width}" height="{chart_h}" role="img"
-       aria-label="{html.escape(title)} diverging bar chart">
-    {''.join(rows)}
-  </svg>
-  <div class="tip"></div>
-</div>
-<script>
-(function() {{
-  const root = document.currentScript.closest('.viz-root');
-  if (!root) return;
-  const mq = window.matchMedia('(prefers-color-scheme: dark)');
-  function apply(mode) {{
-    root.querySelectorAll('rect.fill').forEach(r => {{
-      r.setAttribute('fill', mode ? r.dataset.fillD : r.dataset.fillL);
-    }});
-    root.querySelectorAll('line').forEach(l => {{
-      l.setAttribute('stroke', mode ? '{GRID[1]}' : '{GRID[0]}');
-    }});
-    root.querySelectorAll('text.cat').forEach(t => t.setAttribute('fill', mode ? '{INK['secondary'][1]}' : '{INK['secondary'][0]}'));
-    root.querySelectorAll('text.val').forEach(t => t.setAttribute('fill', mode ? '{INK['primary'][1]}' : '{INK['primary'][0]}'));
-    const tip = root.querySelector('.tip');
-    tip.style.background = mode ? '#262625' : '{SURFACE[0]}';
-    tip.style.color = mode ? '{INK['primary'][1]}' : '{INK['primary'][0]}';
-    tip.style.borderColor = mode ? 'rgba(255,255,255,.14)' : 'rgba(11,11,11,.10)';
-  }}
-  apply(mq.matches);
-  mq.addEventListener ? mq.addEventListener('change', e => apply(e.matches)) : mq.addListener(e => apply(e.matches));
-  const tip = root.querySelector('.tip');
-  root.querySelectorAll('.bar-row').forEach(g => {{
-    const show = () => {{
-      tip.innerHTML = '<span class="t-strong">' + g.dataset.cat + '</span> — <span class="t-strong">' + g.dataset.val + '</span>';
-      tip.style.display = 'block';
-      const rg = root.getBoundingClientRect(), gg = g.getBoundingClientRect();
-      tip.style.left = Math.max(4, Math.min(rg.width - 130, gg.left - rg.left + 8)) + 'px';
-      tip.style.top = (gg.top - rg.top - 34) + 'px';
-    }};
-    g.addEventListener('pointerenter', show);
-    g.addEventListener('focus', show);
-    g.addEventListener('pointerleave', () => tip.style.display = 'none');
-    g.addEventListener('blur', () => tip.style.display = 'none');
-  }});
-}})();
-</script></body></html>"""
-
-
-def risk_meter(p: float) -> str:
-    """Single probability as a meter — same-ramp track, fill = severity.
-
-    For the watchlist rows: blue fill when low, orange when medium, red
-    (status-critical family) when high. Track is a lighter step of the same
-    ramp so state reads across the whole bar, not just the filled part.
-    """
-    if p >= 0.75:
-        fill_l, fill_d, track_l, track_d = "#d03b3b", "#e66767", "#f5c6c6", "#5a2626"
-    elif p >= 0.45:
-        fill_l, fill_d, track_l, track_d = "#eb6834", "#d95926", "#f8d4c4", "#5c2d1a"
-    else:
-        fill_l, fill_d, track_l, track_d = "#2a78d6", "#3987e5", "#cde2fb", "#17325c"
-    pct = min(100, p * 100)
-    return f"""<div class="meter" style="display:flex;align-items:center;gap:8px">
-      <div style="flex:1;background:{track_l};height:8px;border-radius:4px;overflow:hidden;position:relative">
-        <div style="width:{pct:.1f}%;background:{fill_l};height:100%;border-radius:4px"></div>
-      </div>
-      <span style="font-size:12px;color:{INK['secondary'][0]};font-variant-numeric:tabular-nums">{p:.1%}</span>
-    </div>"""
-
-
-def style_kpi(label: str, value: str, delta: str = "", delta_good: bool = True) -> str:
-    """Stat tile: label / value / optional delta. Values in ink, never series colors."""
-    d = ""
-    if delta:
-        color = ("#006300", "#0ca30c") if delta_good else ("#d03b3b", "#e66767")
-        d = f'<div style="font-size:12px;color:{color[0]};margin-top:2px">{delta}</div>'
-    return f"""<div style="padding:2px 0">
-      <div style="font-size:12px;color:{INK['muted'][0]}">{html.escape(label)}</div>
-      <div style="font-size:28px;font-weight:600;color:{INK['primary'][0]};
-                  line-height:1.15;margin-top:2px">{html.escape(value)}</div>{d}
-    </div>"""
+    uid = f"vd{next(_ids)}"
+    data = {
+        "cats": [str(f) for f in features],
+        "coefs": [float(c) for c in coefs],
+        "fvals": [f"{float(c):+.2f}" for c in coefs],
+    }
+    return _render(
+        uid, data, title, subtitle,
+        rclass="chart-coef", slotcls="",
+        js=_JS_COEF, aria=f"{title} — diverging bar chart",
+    )

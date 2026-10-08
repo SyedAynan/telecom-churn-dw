@@ -1,6 +1,6 @@
 # Telecom Churn Data Warehouse
 
-A complete mini data platform that tells a telecom company **which customers are about to leave**. The classic IBM/Kaggle Telco Customer Churn dataset (~7,000 customers) is extracted and cleaned by Python ETL, landed in a **DuckDB** data warehouse, modeled with **dbt** as a star schema (staging → core → marts), summarized into analytics marts, and scored by a logistic-regression churn model whose **predictions are written back into the warehouse** — the pattern real ML-in-DW pipelines follow. A **Streamlit** dashboard finishes the story: overall churn rates, a downloadable high-risk watchlist, and the factors that drive churn.
+A complete mini data platform that tells a telecom company **which customers are about to leave**. The classic IBM/Kaggle Telco Customer Churn dataset (~7,000 customers) is extracted and cleaned by Python ETL, landed in a **DuckDB** data warehouse, modeled with **dbt** as a star schema (staging → core → marts), summarized into analytics marts, and scored by a logistic-regression churn model whose **predictions are written back into the warehouse** — the pattern real ML-in-DW pipelines follow. A **Streamlit** dashboard finishes the story: overall churn rates, a downloadable high-risk watchlist, and the factors that drive churn — with an animated motion layer (count-up KPI tiles with sparklines, staggered bar entrances, a live segment ticker; `prefers-reduced-motion` respected everywhere, no external animation libraries).
 
 ## Architecture
 
@@ -82,9 +82,9 @@ Verified on Windows 11 / Python 3.12.14 / dbt 1.12.5 / DuckDB 1.3.2 — `make al
 
 | | |
 |---|---|
-| ![Overview](docs/screenshots/overview.png) | ![Watchlist](docs/screenshots/watchlist.png) |
+| ![Overview](docs/screenshots/overview-motion.png) | ![Watchlist](docs/screenshots/watchlist-motion.png) |
 
-The Watchlist page (right) is the intervention queue: filter by band, contract, tenure, and minimum probability, then download the CSV for the retention team. The Factors page shows the standardized coefficient chart and the dominant risk reasons on the live watchlist (`docs/screenshots/factors.png`).
+The Watchlist page (right) is the intervention queue: filter by band, contract, tenure, and minimum probability, then download the CSV for the retention team. The Factors page shows the standardized coefficient chart and the dominant risk reasons on the live watchlist (`docs/screenshots/factors-motion.png`).
 
 ## Project layout
 
@@ -93,7 +93,7 @@ telecom-churn-dw/
 ├── etl/            extract / transform / load (Python, idempotent)
 ├── dbt/            dbt project: staging, core (star schema), marts
 ├── ml/             train.py, score.py (predictions written back to DW)
-├── app/            Streamlit dashboard + hand-built SVG chart kit
+├── app/            Streamlit dashboard + hand-built SVG chart kit + motion chrome
 ├── tests/          pytest: ETL idempotency, dbt compile, scoring smoke
 ├── data/           raw/ + processed/ (gitignored, regenerable)
 ├── docs/           screenshots
