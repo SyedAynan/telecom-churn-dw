@@ -27,7 +27,7 @@ from app.charts import (  # noqa: E402
 )
 from app.motion import status_badges  # noqa: E402
 from app import animations, dynamic, live, overview, theme
-from app.assets import app_icon, icon, page_heading
+from app.assets import app_icon, page_heading
 from app.model_insights import FEATURE_LABELS, load_profile
 from app.providers import PROVIDERS, attach_providers, segment_summary
 from app.simulation import pack_features, read_raw_row  # noqa: E402
