@@ -27,7 +27,7 @@ from app.charts import (  # noqa: E402
     line_chart,
 )
 from app.motion import status_badges  # noqa: E402
-from app import live, overview, theme
+from app import dynamic, live, overview, theme
 from app.providers import PROVIDERS, attach_providers, segment_summary
 from app.simulation import pack_features, read_raw_row  # noqa: E402
 from app.simulator import get_simulator  # noqa: E402
@@ -67,6 +67,12 @@ def load_table(sql: str) -> pd.DataFrame:
     return read_frame(sql)
 
 
+@st.cache_data(ttl=5, max_entries=8, show_spinner=False)
+def analytics_source(sql: str) -> pd.DataFrame:
+    """Share short-lived reads across one-second UI ticks, without open handles."""
+    return read_frame(sql)
+
+
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.markdown(f'<div class="brand">{theme.TOWER}<div>Telecom Churn<small>WAREHOUSE INTELLIGENCE</small></div></div>', unsafe_allow_html=True)
@@ -79,7 +85,9 @@ with st.sidebar:
     if st.button("↻ Refresh warehouse reads", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    auto_refresh = st.toggle("Auto-refresh", value=True, help="Refresh Overview every 5 seconds and Live every 3 seconds. Pause to inspect a snapshot.")
+    auto_refresh = st.toggle("Auto-refresh", value=True, help="Update customer analytics and Live every second. Pause to inspect a snapshot.")
+    data_mode = st.selectbox("Analytics source", ["Simulated live demo", "Warehouse snapshot"], key="data_mode",
+                             help="The demo varies outcomes, bills and risk scores every second. Warehouse mode shows the original records.")
     st.divider()
     st.markdown('<div class="sidebar-note">● &nbsp; Warehouse intelligence<br>One platform. Complete customer insights.<br><br>IBM Telco · February 2020</div>', unsafe_allow_html=True)
 
@@ -92,10 +100,10 @@ BASE_SQL = """
     FROM marts.churn_predictions p
     JOIN marts.mart_customer_360 m USING (customer_id)
 """
-if page != "Overview":
+if page not in ("Overview", "Watchlist"):
     summary = load_table("SELECT * FROM marts.mart_churn_summary")
     base = load_table(BASE_SQL)
-warehouse_models = load_manifest_models()
+warehouse_models = load_manifest_models() if page == "Warehouse" else {}
 st.markdown(theme.dashboard_header(), unsafe_allow_html=True)
 
 
@@ -118,6 +126,26 @@ def tenure_trend(df: pd.DataFrame) -> list[float]:
     return [float(grouped.get(b, 0.0)) for b in ordered]
 
 
+def analytics_frame(source: pd.DataFrame) -> pd.DataFrame:
+    if data_mode == "Warehouse snapshot":
+        return source
+    if auto_refresh or "analytics_second" not in st.session_state:
+        st.session_state["analytics_second"] = dynamic.current_second()
+    return dynamic.customer_snapshot(source, st.session_state["analytics_second"])
+
+
+@st.cache_data(ttl=5, max_entries=1, show_spinner=False)
+def overview_source():
+    with get_con() as con:
+        con.execute("BEGIN TRANSACTION")
+        result = (con.execute(BASE_SQL).df(),
+                  con.execute("SELECT * FROM marts.mart_churn_summary").df(),
+                  con.execute("SELECT * FROM marts.mart_revenue_analytics").df(),
+                  datetime.now().astimezone())
+        con.execute("COMMIT")
+    return result
+
+
 # ==================================================================== pages
 if page == "Overview":
     filter_col, note_col = st.columns([1, 2])
@@ -125,16 +153,10 @@ if page == "Overview":
         provider = st.selectbox("Provider", ["All providers", *PROVIDERS], key="provider_filter")
     with note_col:
         st.caption("Demo provider assignments · Jio, Vi, Airtel and BSNL are synthetic customer groups, not actual network performance.")
-    @st.fragment(run_every="5s" if auto_refresh else None)
+    @st.fragment(run_every="1s" if auto_refresh else None)
     def render_overview() -> None:
         try:
-            with get_con() as con:
-                con.execute("BEGIN TRANSACTION")
-                current_base = con.execute(BASE_SQL).df()
-                current_summary = con.execute("SELECT * FROM marts.mart_churn_summary").df()
-                current_revenue = con.execute("SELECT * FROM marts.mart_revenue_analytics").df()
-                con.execute("COMMIT")
-            st.session_state["overview_snapshot"] = (current_base, current_summary, current_revenue, datetime.now().astimezone())
+            st.session_state["overview_snapshot"] = overview_source()
         except duckdb.Error:
             st.warning("Warehouse is updating or temporarily unavailable. Showing the last successful read; the next refresh will retry.")
             if "overview_snapshot" not in st.session_state:
@@ -144,18 +166,18 @@ if page == "Overview":
         if current_base.empty:
             st.info("No scored customers yet. Run the scoring pipeline to populate this view.")
             return
-        all_customers = attach_providers(current_base)
+        all_customers = attach_providers(analytics_frame(current_base))
         selected = all_customers if provider == "All providers" else all_customers[all_customers.provider == provider]
         if selected.empty:
             st.info(f"No customers assigned to {provider} in this snapshot.")
             return
-        if provider != "All providers":
+        if provider != "All providers" or data_mode == "Simulated live demo":
             current_summary = segment_summary(selected)
             current_revenue = pd.DataFrame({"segment_type": ["risk_band"], "addressable_revenue": [selected.addressable_revenue.sum()]})
         st.session_state["visible_customers"] = selected
         st.html(overview.dashboard(selected, current_summary, current_revenue, all_customers=all_customers, provider=provider))
-        st.caption(f"{'Checking every 5 seconds' if auto_refresh else 'Auto-refresh paused'} | Last successful read: {checked:%H:%M:%S %Z} | Source: February 2020 snapshot | USD")
-        st.download_button("Export customer report", selected.to_csv(index=False).encode(), "telecom_customer_report.csv", "text/csv", type="primary")
+        st.caption(f"{'Updating every second' if auto_refresh else 'Auto-refresh paused'} | Last successful read: {checked:%H:%M:%S %Z} | {data_mode} | USD")
+        st.download_button("Export customer report", lambda: selected.to_csv(index=False).encode(), "telecom_customer_report.csv", "text/csv", type="primary", on_click="ignore", key="overview_export")
 
     render_overview()
 
@@ -282,113 +304,121 @@ elif page == "Pipeline":
         )
 
 elif page == "Watchlist":
-    base = attach_providers(base)
-    selected_provider = st.selectbox("Provider", ["All providers", *PROVIDERS], key="watchlist_provider")
-    if selected_provider != "All providers":
-        base = base[base.provider == selected_provider]
-    st.caption("Provider assignments are synthetic demo groups.")
-    st.title("High-risk watchlist")
-    st.caption("Customers the model scores ≥ 75% churn probability — join customer_id "
-               "back to `marts.mart_customer_360` for the full profile")
-    components.html(
-        status_badges([
-            ("WATCHLIST", "err"),
-            ("SOURCE:churn_predictions", "cyan"),
-            ("GRAIN:customer", "neutral"),
-        ]),
-        height=34,
-    )
-
-    fcol1, fcol2, fcol3, fcol4 = st.columns([1.4, 1, 1, 1])
-    with fcol1:
-        band = st.multiselect(
-            "Risk band",
-            ["high", "medium", "low"],
-            default=["high"],
+    @st.fragment(run_every="1s" if auto_refresh else None)
+    def render_watchlist() -> None:
+        base = attach_providers(analytics_frame(analytics_source(BASE_SQL)))
+        st.caption(f"{data_mode} | Updates every second when auto-refresh is enabled.")
+        selected_provider = st.selectbox("Provider", ["All providers", *PROVIDERS], key="watchlist_provider")
+        if selected_provider != "All providers":
+            base = base[base.provider == selected_provider]
+        st.caption("Provider assignments are synthetic demo groups.")
+        st.title("High-risk watchlist")
+        st.caption("Customers with risk scores ≥ 75%. Demo mode uses simulated scores and outcomes; warehouse mode uses stored model predictions.")
+        components.html(
+            status_badges([
+                ("WATCHLIST", "err"),
+                ("SIMULATED SCORES" if data_mode == "Simulated live demo" else "SOURCE:churn_predictions", "cyan"),
+                ("GRAIN:customer", "neutral"),
+            ]),
+            height=34,
         )
-    with fcol2:
-        contracts = sorted(base.contract_label.unique())
-        contract_sel = st.multiselect("Contract", contracts, default=contracts)
-    with fcol3:
-        tenures = ["0-12", "13-24", "25-48", "49-72"]
-        tenure_sel = st.multiselect("Tenure bucket", tenures, default=tenures)
-    with fcol4:
-        min_p = st.slider("Min probability", 0.0, 1.0, 0.0, 0.05)
 
-    view = base[
-        base.risk_band.isin(band or ["high"])
-        & base.contract_label.isin(contract_sel or contracts)
-        & base.tenure_bucket.isin(tenure_sel or tenures)
-        & (base.churn_probability >= min_p)
-    ].sort_values("churn_probability", ascending=False)
+        fcol1, fcol2, fcol3, fcol4 = st.columns([1.4, 1, 1, 1])
+        with fcol1:
+            band = st.multiselect(
+                "Risk band",
+                ["high", "medium", "low"],
+                default=["high"],
+            )
+        with fcol2:
+            contracts = sorted(base.contract_label.unique())
+            contract_sel = st.multiselect("Contract", contracts, default=contracts)
+        with fcol3:
+            tenures = ["0-12", "13-24", "25-48", "49-72"]
+            tenure_sel = st.multiselect("Tenure bucket", tenures, default=tenures)
+        with fcol4:
+            min_p = st.slider("Min probability", 0.0, 1.0, 0.0, 0.05)
 
-    st.markdown(
-        f"**{len(view):,} customers** on the list · "
-        f"actual churn in this slice: **{fmt_pct(view.churned.mean()) if len(view) else '—'}**"
-    )
+        view = base[
+            base.risk_band.isin(band or ["high"])
+            & base.contract_label.isin(contract_sel or contracts)
+            & base.tenure_bucket.isin(tenure_sel or tenures)
+            & (base.churn_probability >= min_p)
+        ].sort_values("churn_probability", ascending=False)
 
-    tbl = view.rename(columns={
-        "provider": "Provider (demo)",
-        "customer_id": "Customer", "churn_probability": "P(churn)",
-        "risk_band": "Band", "top_reason": "Top reason",
-        "contract_label": "Contract", "tenure_bucket": "Tenure",
-        "monthly_charges": "Monthly $", "n_addons": "Add-ons", "churned": "Churned?",
-    })[
-        ["Customer", "Provider (demo)", "P(churn)", "Band", "Top reason", "Contract",
-         "Tenure", "Monthly $", "Add-ons", "Churned?"]
-    ]
+        st.markdown(
+            f"**{len(view):,} customers** on the list · "
+            f"actual churn in this slice: **{fmt_pct(view.churned.mean()) if len(view) else '—'}**"
+        )
 
-    st.data_editor(
-        tbl,
-        use_container_width=True,
-        height=430,
-        column_config={
-            "P(churn)": st.column_config.NumberColumn(format="%.1f%%"),
-            "Monthly $": st.column_config.NumberColumn(format="$%.2f"),
-            "Churned?": st.column_config.CheckboxColumn(
-                help="Already churned in this snapshot (Feb 2020)"
-            ),
-        },
-        disabled=True,
-        key="watchlist_editor",
-        hide_index=True,
-    )
+        tbl = view.rename(columns={
+            "provider": "Provider (demo)",
+            "customer_id": "Customer", "churn_probability": "P(churn)",
+            "risk_band": "Band", "top_reason": "Top reason",
+            "contract_label": "Contract", "tenure_bucket": "Tenure",
+            "monthly_charges": "Monthly $", "n_addons": "Add-ons", "churned": "Churned?",
+        })[
+            ["Customer", "Provider (demo)", "P(churn)", "Band", "Top reason", "Contract",
+             "Tenure", "Monthly $", "Add-ons", "Churned?"]
+        ]
+        if data_mode == "Simulated live demo":
+            tbl["Data source"] = view.data_source
+            tbl["Simulation second"] = view.simulation_second
 
-    st.download_button(
-        "⬇ Download watchlist as CSV",
-        data=tbl.to_csv(index=False).encode(),
-        file_name="churn_watchlist.csv",
-        mime="text/csv",
-        type="primary",
-    )
+        st.data_editor(
+            tbl,
+            use_container_width=True,
+            height=430,
+            column_config={
+                "P(churn)": st.column_config.NumberColumn(format="%.1f%%"),
+                "Monthly $": st.column_config.NumberColumn(format="$%.2f"),
+                "Churned?": st.column_config.CheckboxColumn(
+                    help="Already churned in this snapshot (Feb 2020)"
+                ),
+            },
+            disabled=True,
+            key="watchlist_editor",
+            hide_index=True,
+        )
 
-    st.caption(
-        "The watchlist is the intervention queue: retention offers, billing follow-ups, "
-        "service check-ins — ordered by probability, explained by the top reason."
-    )
+        st.download_button(
+            "⬇ Download watchlist as CSV",
+            data=lambda: tbl.to_csv(index=False).encode(),
+            file_name="churn_watchlist.csv",
+            mime="text/csv",
+            type="primary",
+            on_click="ignore",
+        )
 
-    st.markdown("#### Customer drill-through")
-    selected_customer = st.selectbox(
-        "Select a customer from the prediction + 360-mart join",
-        ["—"] + view.customer_id.tolist(),
-    )
-    if selected_customer != "—":
-        detail = base[base.customer_id == selected_customer].iloc[0]
-        st.info("Source path: marts.churn_predictions → marts.mart_customer_360 · grain: one row per customer")
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("P(churn)", fmt_pct(detail.churn_probability))
-        d2.metric("Risk band", detail.risk_band)
-        d3.metric("Monthly charges", f"${detail.monthly_charges:,.2f}")
-        d4.metric("Tenure", f"{detail.tenure_months} months")
-        st.write({
-            "Customer": detail.customer_id,
-            "Top reason": detail.top_reason,
-            "Contract": detail.contract_label,
-            "Payment method": detail.payment_method_label,
-            "Tenure bucket": detail.tenure_bucket,
-            "Add-on services": int(detail.n_addons),
-            "Already churned in snapshot": bool(detail.churned),
-        })
+        st.caption(
+            "The watchlist is the intervention queue: retention offers, billing follow-ups, "
+            "service check-ins — ordered by probability, explained by the top reason."
+        )
+
+        st.markdown("#### Customer drill-through")
+        selected_customer = st.selectbox(
+            "Select a customer from the prediction + 360-mart join",
+            ["—"] + view.customer_id.tolist(),
+        )
+        if selected_customer != "—":
+            detail = base[base.customer_id == selected_customer].iloc[0]
+            st.info("Source path: marts.churn_predictions → marts.mart_customer_360 · grain: one row per customer")
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("P(churn)", fmt_pct(detail.churn_probability))
+            d2.metric("Risk band", detail.risk_band)
+            d3.metric("Monthly charges", f"${detail.monthly_charges:,.2f}")
+            d4.metric("Tenure", f"{detail.tenure_months} months")
+            st.write({
+                "Customer": detail.customer_id,
+                "Top reason": detail.top_reason,
+                "Contract": detail.contract_label,
+                "Payment method": detail.payment_method_label,
+                "Tenure bucket": detail.tenure_bucket,
+                "Add-on services": int(detail.n_addons),
+                "Already churned in snapshot": bool(detail.churned),
+            })
+
+    render_watchlist()
 
 
 elif page == "Live":
@@ -404,11 +434,11 @@ elif page == "Live":
         feed_mode = st.selectbox("Feed view", ["All signals", "Negative only"], key="live_feed_mode")
     sim = get_simulator(base[["customer_id", "churn_probability", "monthly_charges", "risk_band"]].copy())
 
-    @st.fragment(run_every="3s" if auto_refresh else None)
+    @st.fragment(run_every="1s" if auto_refresh else None)
     def live_monitor() -> None:
         if auto_refresh or "live_snapshot" not in st.session_state:
             try:
-                live_base = load_table(BASE_SQL)
+                live_base = analytics_source(BASE_SQL)
                 checked = time.time()
                 st.session_state["live_snapshot"] = (sim.window_events(30, now=checked), live_base, checked)
             except duckdb.Error:
@@ -421,8 +451,8 @@ elif page == "Live":
         st.session_state["live_visible_events"] = events
         st.html(live.dashboard(events, queue, now=checked, minutes=window_minutes,
                                providers=operator_filter, feed_mode=feed_mode, paused=not auto_refresh))
-        st.download_button("Export review queue", queue.rename(columns={"operator": "provider_demo", "priority_score": "demo_priority_score"}).to_csv(index=False).encode(),
-                           "live_review_queue.csv", "text/csv", disabled=queue.empty, icon=":material/download:")
+        st.download_button("Export review queue", lambda: queue.rename(columns={"operator": "provider_demo", "priority_score": "demo_priority_score"}).to_csv(index=False).encode(),
+                           "live_review_queue.csv", "text/csv", disabled=queue.empty, icon=":material/download:", on_click="ignore", key="live_export")
 
     live_monitor()
 
@@ -564,25 +594,31 @@ elif page == "Factors":
 
     st.divider()
 
-    st.markdown("#### Top reason on the watchlist")
-    reason_counts = (
-        base[base.risk_band != "low"]
-        .groupby("top_reason")
-        .size()
-        .sort_values(ascending=False)
-        .head(6)
-    )
-    components.html(
-        hbar_chart(
-            "Why customers are risky (medium+high band)",
-            reason_counts.index.tolist(),
-            reason_counts.tolist(),
-            value_fmt="{:,.0f}",
-            subtitle="Count of watchlist customers by dominant risk factor",
-            color_slot=0,
-        ),
-        height=chart_height(len(reason_counts), True),
-    )
+    @st.fragment(run_every="1s" if auto_refresh else None)
+    def render_risk_reasons() -> None:
+        current = analytics_frame(analytics_source(BASE_SQL))
+        st.caption(f"{data_mode} | Customer risk distribution updates every second.")
+        st.markdown("#### Top reason on the watchlist")
+        reason_counts = (
+            current[current.risk_band != "low"]
+            .groupby("top_reason")
+            .size()
+            .sort_values(ascending=False)
+            .head(6)
+        )
+        components.html(
+            hbar_chart(
+                "Why customers are risky (medium+high band)",
+                reason_counts.index.tolist(),
+                reason_counts.tolist(),
+                value_fmt="{:,.0f}",
+                subtitle="Count of watchlist customers by dominant risk factor",
+                color_slot=0,
+            ),
+            height=chart_height(len(reason_counts), True),
+        )
+
+    render_risk_reasons()
 
     st.markdown("#### Read the coefficients as odds ratios")
     st.caption(

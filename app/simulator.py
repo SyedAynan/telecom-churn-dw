@@ -37,7 +37,7 @@ REALTIME_DB = WAREHOUSE_DIR / "realtime.duckdb"
 
 # Events are generated about every EVENT_INTERVAL_SECONDS (jittered),
 # several customers per tick.
-EVENT_INTERVAL_SECONDS = 2.0
+EVENT_INTERVAL_SECONDS = 1.0
 BATCH_CUSTOMERS = (6, 14)          # random range of customers touched per tick
 
 # base rates per tick-share; negative events get a risk multiplier
@@ -182,7 +182,7 @@ class Simulator:
             except duckdb.IOException:
                 # another process holds realtime.duckdb (two dashboards open)
                 pass
-            time.sleep(EVENT_INTERVAL_SECONDS * (0.7 + 0.6 * self.rng.random()))
+            self._stop.wait(EVENT_INTERVAL_SECONDS)
 
     def stop(self) -> None:
         self._stop.set()

@@ -42,6 +42,7 @@ def test_dashboard_pages_render_without_exceptions(dashboard, page):
 
 def test_overview_retention_value_counts_each_customer_once(dashboard):
     dashboard.run()
+    dashboard.sidebar.selectbox(key="data_mode").select("Warehouse snapshot").run()
     assert not dashboard.exception
     with duckdb.connect(str(DB_PATH), read_only=True) as con:
         expected = con.sql("""
@@ -51,6 +52,43 @@ def test_overview_retention_value_counts_each_customer_once(dashboard):
     tiles = [element.proto.body for element in dashboard.get("html")]
     retention_tile = next(tile for tile in tiles if "Addressable retention value" in tile)
     assert f"${expected:,.0f}" in retention_tile
+
+
+def test_dynamic_overview_updates_charts_and_freezes_when_paused(dashboard, monkeypatch):
+    import app.dynamic as dynamic
+
+    monkeypatch.setattr(dynamic, "current_second", lambda: 100)
+    dashboard.run()
+    first = dashboard.session_state["visible_customers"].copy()
+    first_html = next(e.proto.body for e in dashboard.get("html") if "stats-grid" in e.proto.body)
+    monkeypatch.setattr(dynamic, "current_second", lambda: 101)
+    dashboard.run()
+    second = dashboard.session_state["visible_customers"].copy()
+    second_html = next(e.proto.body for e in dashboard.get("html") if "stats-grid" in e.proto.body)
+    assert not first.churned.equals(second.churned)
+    assert first_html != second_html
+    assert "Simulated live demo" in second_html
+    dashboard.sidebar.toggle[0].set_value(False).run()
+    monkeypatch.setattr(dynamic, "current_second", lambda: 102)
+    dashboard.run()
+    pd.testing.assert_frame_equal(second, dashboard.session_state["visible_customers"])
+    dashboard.sidebar.toggle[0].set_value(True).run()
+    assert not second.monthly_charges.equals(dashboard.session_state["visible_customers"].monthly_charges)
+
+
+def test_refresh_does_not_rebuild_csv_until_download(dashboard, monkeypatch):
+    calls = []
+    original = pd.DataFrame.to_csv
+
+    def tracked(frame, *args, **kwargs):
+        calls.append(len(frame))
+        return original(frame, *args, **kwargs)
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", tracked)
+    dashboard.run()
+    dashboard.run()
+    assert not dashboard.exception
+    assert calls == []
 
 
 @pytest.mark.parametrize("provider", ["Jio", "Vi", "Airtel", "BSNL"])
