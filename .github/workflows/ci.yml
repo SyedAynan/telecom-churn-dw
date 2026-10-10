@@ -33,6 +33,16 @@ jobs:
         run: |
           uv run dbt deps --project-dir dbt --profiles-dir dbt
 
+      - name: Execute Full Warehouse ETL & ML Pipeline Build
+        run: |
+          uv run python -m etl.extract
+          uv run python -m etl.transform
+          uv run python -m etl.load
+          uv run dbt build --project-dir dbt --profiles-dir dbt --exclude mart_revenue_analytics
+          uv run python -m ml.train
+          uv run python -m ml.score
+          uv run dbt build --project-dir dbt --profiles-dir dbt --select mart_revenue_analytics
+
       - name: Run Test Suite
         run: |
           uv run pytest -v
