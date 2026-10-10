@@ -1,0 +1,27 @@
+{
+  "Jio": {
+    "source": "https://iconscout.com/lottie-animation/jio-wifi-animation_10697936",
+    "placement": "Jio tile in the stable signal animation strip",
+    "status": "local_video_integrated"
+  },
+  "Airtel": {
+    "source": "https://iconscout.com/lottie-animation/airtel-flipping-logo-animation_11825803",
+    "placement": "Airtel tile in the stable signal animation strip",
+    "status": "local_video_integrated"
+  },
+  "Vi": {
+    "source": "https://iconscout.com/lottie-animation/vi-network-animation_11625736",
+    "placement": "Vi tile in the stable signal animation strip",
+    "status": "local_video_integrated"
+  },
+  "BSNL": {
+    "source": "https://iconscout.com/lottie-animation/bsnl-sim-card-animation_10437298",
+    "placement": "BSNL tile in the stable signal animation strip",
+    "status": "local_video_integrated"
+  },
+  "China Telecom": {
+    "source": "https://iconscout.com/lottie-animation/china-telecom-signal-animation_10697921",
+    "placement": "Labeled illustration in the signal strip; not an analytics provider",
+    "status": "local_video_integrated"
+  }
+}

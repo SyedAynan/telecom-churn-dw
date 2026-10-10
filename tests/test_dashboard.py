@@ -117,6 +117,21 @@ def test_watchlist_identifies_provider_in_customer_report(dashboard):
     assert set(report["Provider (demo)"]) == {"BSNL"}
 
 
+def test_watchlist_customer_selection_survives_live_risk_changes(dashboard, monkeypatch):
+    from app import dynamic
+
+    monkeypatch.setattr(dynamic, "current_second", lambda: 100)
+    dashboard.run()
+    dashboard.sidebar.radio[0].set_value("Watchlist").run()
+    picker = dashboard.selectbox(key="watchlist_customer")
+    selected = picker.options[1]
+    picker.select(selected).run()
+    monkeypatch.setattr(dynamic, "current_second", lambda: 101)
+    dashboard.run()
+    assert dashboard.selectbox(key="watchlist_customer").value == selected
+    assert not dashboard.exception
+
+
 def test_live_filters_and_pause_keep_a_consistent_snapshot(dashboard, monkeypatch):
     import time
 

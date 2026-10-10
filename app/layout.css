@@ -1,5 +1,7 @@
 /* One layout system: neon accents, quiet surfaces, and content-sized cards. */
 :root{--app-bg:#060608;--surface:#101014;--edge:#ffffff12;--muted:#9595a6;--cyan:#00d9ff}
+/* Live fragments must not restart entrance animations on every refresh. */
+[data-testid="stMainBlock"] > div{animation:none!important}
 [data-testid="stAppViewContainer"],[data-testid="stMain"]{background:var(--app-bg)}
 [data-testid="stMainBlockContainer"]{max-width:1600px;padding:3.2rem 2.2rem 3rem}
 [data-testid="stMainBlockContainer"]>[data-testid="stVerticalBlock"]{gap:20px}
@@ -172,3 +174,16 @@
 @container(max-width:700px){.provider-banner{padding:14px}.provider-banner .provider-card{padding:0}.provider-grid{gap:12px}.provider-caption{padding:13px 12px 0}.provider-caption small{font-size:7px}.provider-banner .provider-numbers,.live-provider-values{padding:12px}.provider-numbers strong{font-size:20px}.provider-artwork{height:110px}}
 @container(max-width:500px){.provider-banner{padding:10px}.provider-banner .provider-card{padding:0}.provider-artwork,.live-providers .provider-artwork{height:94px}.provider-logo-plate,.live-providers .provider-logo-plate{max-width:calc(100% - 20px);height:64px;padding:10px}.provider-logo.logo-jio,.provider-logo.logo-vi{height:46px}.provider-caption{gap:5px;flex-wrap:wrap}.provider-caption small{font-size:6px}.provider-numbers strong{font-size:18px}.provider-numbers small{font-size:9px}}
 @media(max-width:480px){.workspace-mark{width:36px;height:36px;flex-basis:36px;border-radius:9px}.workspace-mark .ui-icon{width:21px;height:21px}.header-status{display:none}.bi-header{gap:11px}}
+
+/* Iconscout visual cues remain decorative; every control keeps its text label. */
+.asset-page-heading{display:flex;align-items:center;gap:16px;margin:8px 0;font-family:Inter,'Segoe UI',sans-serif}
+.asset-heading-icon{display:grid;place-items:center;flex:0 0 52px;width:52px;height:52px;border:1px solid #00d9ff26;border-radius:14px;background:linear-gradient(140deg,#00d9ff10,#11121a)}
+.asset-heading-icon .ui-icon{width:27px;height:27px}
+.asset-page-heading h2{font-size:28px!important;font-weight:600!important;line-height:1.3!important;margin:6px 0 0!important;padding:0!important;letter-spacing:-.6px!important}
+.overview-shell .panel-heading h3{display:flex;align-items:center;gap:9px}.panel-heading h3 .ui-icon{width:19px;height:19px;flex-shrink:0}
+.insight-asset{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;background:#ffffff04;border:1px solid #ffffff08;border-radius:8px;margin-top:2px}.insight-asset .ui-icon{width:16px;height:16px}
+.live-event-title strong{display:flex;align-items:center;gap:7px}.live-event-title .ui-icon{width:16px;height:16px;flex:0 0 16px}
+.live-empty{display:flex;flex-direction:column;justify-content:center;gap:10px;min-height:230px;padding:28px 18px;border:1px dashed #ffffff14;border-radius:10px;background:radial-gradient(ellipse at 50% 0%,#00d9ff06,transparent 70%)}
+.empty-asset{width:54px;height:54px;display:grid;place-items:center;background:#00d9ff08;border:1px solid #00d9ff18;border-radius:16px;margin-bottom:4px}.empty-asset .ui-icon{width:28px;height:28px}
+.live-empty strong{color:#d9dce8;font-size:13px;font-weight:500}.live-empty p{margin:0;max-width:32ch;color:#9292a3;font-size:11px;line-height:1.7}
+@media(max-width:600px){.asset-page-heading{gap:12px}.asset-page-heading h2{font-size:23px!important}.asset-heading-icon{width:44px;height:44px;flex-basis:44px}.asset-heading-icon .ui-icon{width:23px;height:23px}}

@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from app.assets import icon, svg_image, provider_banner
+from app.assets import icon, svg_image, provider_banner, empty_state
 from app.providers import PROVIDERS
 from app.simulator import EVENT_TYPES
 
@@ -16,6 +16,8 @@ LABELS = {"payment": "Payment received", "failed_payment": "Payment failed",
 ACTIONS = {"failed_payment": "Review payment retry", "ticket": "Review billing dispute",
            "usage_alert": "Review data allowance", "cancellation": "Prioritize retention contact"}
 NEGATIVE = {name for name, config in EVENT_TYPES.items() if config[0]}
+EVENT_ICONS = {"payment": "wallet", "failed_payment": "credit-card", "ticket": "headphones-alt",
+               "usage_alert": "signal", "plan_change": "exchange", "cancellation": "user-minus"}
 
 
 def review_queue(events: pd.DataFrame, base: pd.DataFrame) -> pd.DataFrame:
@@ -81,12 +83,13 @@ def dashboard(events: pd.DataFrame, queue: pd.DataFrame, *, now: float, minutes:
         negative_event = event.event_type in NEGATIVE
         color = "#ff537f" if negative_event else "#00d9ff"
         severity = "URGENT" if severe else "REVIEW" if negative_event else "INFO"
-        feed_rows.append(f'<article class="live-event"><div class="live-event-meta"><time>{datetime.fromtimestamp(event.ts):%H:%M:%S}</time><span style="color:{PROVIDERS.get(event.operator, "#aaa")}">{esc(event.operator)}</span><b style="color:{color}">{severity}</b></div><div class="live-event-title"><strong>{esc(LABELS.get(event.event_type, event.event_type))}</strong><span>{esc(event.customer_id)}</span></div><p>{esc(event.detail)}</p></article>')
-    empty = '<div class="live-empty">No signals in this window.</div>' if providers else '<div class="live-empty">No providers selected.</div>'
+        feed_rows.append(f'<article class="live-event"><div class="live-event-meta"><time>{datetime.fromtimestamp(event.ts):%H:%M:%S}</time><span style="color:{PROVIDERS.get(event.operator, "#aaa")}">{esc(event.operator)}</span><b style="color:{color}">{severity}</b></div><div class="live-event-title"><strong>{icon(EVENT_ICONS.get(event.event_type, "signal"), color)}{esc(LABELS.get(event.event_type, event.event_type))}</strong><span>{esc(event.customer_id)}</span></div><p>{esc(event.detail)}</p></article>')
+    empty = (empty_state("No signals in this window", "Try a longer window or another feed view.", "signal")
+             if providers else empty_state("No providers selected", "Choose a provider above to see its activity."))
     table_rows = ''
     for row in queue.head(8).itertuples(index=False):
         table_rows += f'<tr><td><strong>{esc(row.customer_id)}</strong><small style="color:{PROVIDERS.get(row.operator, "#aaa")}">{esc(row.operator)}</small></td><td>{row.neg_events}</td><td><strong class="live-score">{row.priority_score:.0%}</strong><small>base {row.churn_probability:.0%}</small></td><td>{esc(row.suggested_action)}</td></tr>'
-    table = ('<div class="live-table-scroll" tabindex="0" aria-label="Customer review queue"><table><thead><tr><th>Customer</th><th>Signals</th><th>Priority</th><th>Suggested action</th></tr></thead><tbody>' + table_rows + '</tbody></table></div>') if len(queue) else '<div class="live-empty">No customers need review in this window.</div>'
+    table = ('<div class="live-table-scroll" tabindex="0" aria-label="Customer review queue"><table><thead><tr><th>Customer</th><th>Signals</th><th>Priority</th><th>Suggested action</th></tr></thead><tbody>' + table_rows + '</tbody></table></div>') if len(queue) else empty_state("Review queue is clear", "No matched customers have negative signals in this window.", "shield-check")
     return f'''<div class="live-shell">
       <div class="live-status"><span class="live-state {"paused" if paused else ""}"><i></i>{state}</span><span>{freshness} &nbsp; / &nbsp; Snapshot {datetime.fromtimestamp(now):%H:%M:%S}</span></div>
       <div class="live-kpis">{tiles}</div>

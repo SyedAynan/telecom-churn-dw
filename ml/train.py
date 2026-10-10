@@ -8,6 +8,8 @@ Prints AUC + top features. Model saved to ml/models/churn_logreg.joblib.
 """
 from __future__ import annotations
 
+import json
+
 import duckdb
 import joblib
 import pandas as pd
@@ -62,6 +64,10 @@ def train() -> dict:
          "auc": auc, "train_rows": len(X_tr)},
         path,
     )
+    # BI needs coefficients, not an executable sklearn object or native DLLs.
+    metadata = {"feature_columns": FEATURE_COLUMNS, "coefficients": coefs.tolist(),
+                "auc": float(auc), "train_rows": len(X_tr)}
+    path.with_suffix(".json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
     print(f"[train] rows={len(df)}  churners={n_churn} ({churn_rate:.1%})")
     print(f"[train] holdout AUC = {auc:.4f}")
