@@ -19,7 +19,6 @@ ml/models/*
 dbt/target/
 dbt/logs/
 dbt/dbt_packages/
-dbt/packages.yml
 
 # Env & local
 .env

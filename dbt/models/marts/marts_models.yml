@@ -29,3 +29,24 @@ models:
               values: ['contract', 'payment_method', 'tenure_bucket', 'monthly_charge_band']
       - name: segment_label
         tests: [not_null]
+
+  - name: mart_revenue_analytics
+    description: >
+      Revenue economics by risk band and contract segment: MRR, ARPU, lost
+      MRR, lost lifetime value, and expected-remaining-lifetime value (eCLV)
+      computed in SQL from the model's churn probabilities. Built after
+      churn_predictions: `make all` builds the base models first, trains and
+      scores customers, then builds this mart with `make dbt-finish`.
+    columns:
+      - name: segment_type
+        tests:
+          - accepted_values:
+              values: ['risk_band', 'contract']
+      - name: segment_label
+        tests: [not_null]
+      - name: mrr
+        description: Sum of monthly charges across the segment.
+        tests: [not_null]
+      - name: addressable_revenue
+        description: eCLV weighted by churn probability — the revenue at risk.
+        tests: [not_null]
