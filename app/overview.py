@@ -43,7 +43,7 @@ def panel(title: str, body: str, subtitle: str = "") -> str:
             f'<p>{html.escape(subtitle)}</p></header>{body}</section>')
 
 
-def tenure_chart(base: pd.DataFrame) -> str:
+def tenure_chart(base: pd.DataFrame, simulated: bool = False) -> str:
     buckets = pd.cut(base.tenure_months, [-1, 6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72])
     grouped = base.groupby(buckets, observed=False).churned.agg(["count", "sum", "mean"])
     peak = max(float(grouped["count"].max()), 1)
@@ -63,7 +63,7 @@ def tenure_chart(base: pd.DataFrame) -> str:
     body += '<polyline points="' + ' '.join(f'{x},{y}' for x,y in points) + '" stroke="#c789ff" stroke-width="2" fill="none"/>'
     body += ''.join(f'<circle cx="{x}" cy="{y}" r="3" fill="#e1b9ff"/>' for x,y in points)
     body += '</svg></div><div class="legend"><span><i class="dot" style="background:#00d9ff"></i>Retained</span><span><i class="dot" style="background:#ff237c"></i>Churned</span><span><i class="dot" style="background:#c789ff"></i>Churn rate · right axis</span></div>'
-    return panel("Customer tenure & churn", body, "Customer tenure in months · February 2020 snapshot")
+    return panel("Customer tenure & churn", body, "Customer tenure in months · " + ("Simulated outcomes" if simulated else "February 2020 snapshot"))
 
 
 def contract_donut(base: pd.DataFrame) -> str:
@@ -91,16 +91,17 @@ def bars(title: str, labels: list, values: list, *, money: bool = False) -> str:
     return panel(title, body + '</div>', "Monthly charges · USD" if money else "Observed churn rate by segment")
 
 
-def insights(base: pd.DataFrame, summary: pd.DataFrame) -> str:
+def insights(base: pd.DataFrame, summary: pd.DataFrame, simulated: bool = False) -> str:
     facts = []
     for segment in ("contract", "tenure_bucket", "payment_method"):
         rows = summary[summary.segment_type == segment]
         highest = rows.loc[rows.churn_rate.idxmax()]
         label = html.escape(str(highest.segment_label)) + (" months" if segment == "tenure_bucket" else "")
         facts.append(f'<b>{label}</b> customers have <b>{highest.churn_rate:.1%}</b> churn.')
-    facts.append(f'<b>{int((base.risk_band == "high").sum()):,} customers</b> score at least 75% model churn probability.')
+    score_label = "demo risk score" if simulated else "model churn probability"
+    facts.append(f'<b>{int((base.risk_band == "high").sum()):,} customers</b> score at least 75% {score_label}.')
     body = ''.join(f'<div class="insight"><span class="mark">◈</span><span>{fact}</span></div>' for fact in facts)
-    return panel("✧  Key insights", body, "From your warehouse")
+    return panel("✧  Key insights", body, "From the simulated scenario" if simulated else "From your warehouse")
 
 
 def recommendations() -> str:
@@ -108,12 +109,12 @@ def recommendations() -> str:
     return panel("◎  Retention opportunities", ''.join(f'<div class="insight"><span class="mark">✓</span><span>{item}</span></div>' for item in items), "Suggested actions · validate with your retention team")
 
 
-def customer_table(base: pd.DataFrame) -> str:
+def customer_table(base: pd.DataFrame, simulated: bool = False) -> str:
     rows = base[base.churned].sort_values("churn_probability", ascending=False).head(5)
     body = '<div class="table-scroll" tabindex="0" aria-label="Scrollable customer sample"><table class="table"><thead><tr><th>Customer ID</th><th>Contract</th><th>Tenure</th><th>Monthly bill</th><th>Model risk</th></tr></thead><tbody>'
     for row in rows.itertuples():
         body += f'<tr><td>{html.escape(row.customer_id)}</td><td>{html.escape(row.contract_label)}</td><td>{row.tenure_months} mo</td><td>${row.monthly_charges:.2f}</td><td style="color:#ff668f">{row.churn_probability:.1%}</td></tr>'
-    return panel("Churned customers · sample", body + '</tbody></table></div>', "Historical outcomes · ranked by model probability")
+    return panel("Churned customers · sample", body + '</tbody></table></div>', "Simulated outcomes and scores" if simulated else "Historical outcomes · ranked by model probability")
 
 
 def provider_cards(base: pd.DataFrame, selected: str) -> str:
@@ -131,10 +132,12 @@ def provider_cards(base: pd.DataFrame, selected: str) -> str:
 
 def dashboard(base: pd.DataFrame, summary: pd.DataFrame, revenue: pd.DataFrame, *, all_customers: pd.DataFrame | None = None, provider: str = "All providers") -> str:
     """A single flowing grid so cards respond to available content width."""
+    simulated = "simulation_second" in base.columns
+    source_label = "Simulated live demo" if simulated else "February 2020 snapshot"
     value = revenue.loc[revenue.segment_type == "risk_band", "addressable_revenue"].sum()
     metrics = [
         ("Total customers", f"{len(base):,}", "Customers in the snapshot", "#00d9ff", "users"),
-        ("Churned customers", f"{int(base.churned.sum()):,}", "Observed customer exits", "#ff237c", "exit"),
+        ("Churned customers", f"{int(base.churned.sum()):,}", "Simulated customer exits" if simulated else "Observed customer exits", "#ff237c", "exit"),
         ("Overall churn rate", f"{base.churned.mean():.1%}", "Share of all customers", "#ad57ff", "percent"),
         ("Monthly charges", f"${base.monthly_charges.sum():,.0f}", "Across all customers · USD", "#00efb2", "wallet"),
         ("Addressable retention value", f"${value:,.0f}", "Modelled lifetime value at risk", "#ffb53d", "shield"),
@@ -157,12 +160,12 @@ def dashboard(base: pd.DataFrame, summary: pd.DataFrame, revenue: pd.DataFrame, 
     title = "Customer overview" if provider == "All providers" else f"{html.escape(provider)} overview"
     networks = provider_cards(all_customers, provider) if all_customers is not None else ""
     return ('<div class="overview-shell"><div class="overview-head"><div><div class="eyebrow">CUSTOMER INTELLIGENCE</div>'
-            f'<h2>{title}</h2><p>Churn, revenue, and retention opportunities.</p></div>'
-            '<span class="snapshot-pill"><i></i> February 2020 snapshot</span></div>'
+            f'<h2>{title}</h2><p>{"Accelerated demo · outcomes, bills and risk scores vary every second." if simulated else "Churn, revenue, and retention opportunities."}</p></div>'
+            f'<span class="snapshot-pill"><i></i> {source_label}</span></div>'
             f'{networks}'
             f'<div class="stats-grid">{kpis}</div><div class="section-label">PERFORMANCE OVERVIEW<span>01 — Portfolio health</span></div>'
-            f'<div class="primary-grid">{tenure_chart(base)}{contract_donut(base)}</div>'
+            f'<div class="primary-grid">{tenure_chart(base, simulated)}{contract_donut(base)}</div>'
             '<div class="section-label">WHAT DRIVES CHURN<span>02 — Segments & opportunities</span></div>'
             f'<div class="analysis-grid"><div class="segment-grid">{"".join(segment_panels)}</div>'
-            f'<aside class="insights-stack">{insights(base, summary)}{recommendations()}</aside></div>'
-            f'<div class="customer-section">{customer_table(base)}</div></div>')
+            f'<aside class="insights-stack">{insights(base, summary, simulated)}{recommendations()}</aside></div>'
+            f'<div class="customer-section">{customer_table(base, simulated)}</div></div>')

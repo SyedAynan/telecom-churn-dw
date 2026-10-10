@@ -1,0 +1,22 @@
+name: ✨ Feature Request
+description: Propose a new feature, dbt mart, or ML model enhancement
+title: "[FEAT]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Submit an idea for improving analytics or pipeline capabilities.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What problem would this feature solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Suggested Solution
+      description: Describe the proposed data model, ML feature, or UI addition.
+    validations:
+      required: true

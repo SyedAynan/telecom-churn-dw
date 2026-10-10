@@ -1,0 +1,33 @@
+name: 🐛 Bug Report
+description: Report a data pipeline, dbt, or UI issue
+title: "[BUG]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for helping improve the Telecom Churn Data Warehouse!
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Describe what failed in the pipeline or dashboard.
+      placeholder: Describe the error...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Commands or UI interactions to reproduce.
+      placeholder: |
+        1. Run 'make all'
+        2. Launch 'make dashboard'
+        3. Click 'Live Telemetry'...
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Python version, DuckDB version, dbt version, OS.
+      placeholder: Windows 11, Python 3.12, DuckDB 1.3
