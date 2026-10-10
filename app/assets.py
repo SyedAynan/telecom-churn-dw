@@ -6,6 +6,15 @@ from functools import lru_cache
 
 ICON_DIR = Path(__file__).parent / "assets" / "unicons"
 PROVIDER_DIR = Path(__file__).parent / "assets" / "providers"
+ANIMATIONS_DIR = Path(__file__).resolve().parent.parent / "assets" / "animations"
+
+ANIMATION_FILES = {
+    "Jio": "jio_wi_fi_animation_10697936.gif",
+    "Vi": "vi_signal_animation_10697969.gif",
+    "Airtel": "airtel_flipping_logo_animation_11825803.gif",
+    "BSNL": "bsnl_sim_card_animation_10437298.gif",
+    "China Telecom": "china_telecom_signal_animation_10697921.gif",
+}
 
 
 def svg_image(svg: str, *, css_class: str = "", label: str = "") -> str:
@@ -33,17 +42,31 @@ def app_icon(css_class: str = "ui-icon") -> str:
     return _logo_image("telecom-churn.png", css_class, "Telecom Churn")
 
 
+@lru_cache(maxsize=8)
+def provider_animation(name: str) -> str:
+    """Iconscout brand animations from assets/animations embedded as data URIs."""
+    filename = ANIMATION_FILES.get(name)
+    if filename:
+        path = ANIMATIONS_DIR / filename
+        if path.exists():
+            encoded = base64.b64encode(path.read_bytes()).decode()
+            mime = "image/gif" if path.suffix.lower() == ".gif" else "image/png"
+            return (f'<img class="provider-animation anim-{html.escape(name.lower(), quote=True)}" '
+                    f'alt="{html.escape(name, quote=True)} animation" '
+                    f'src="data:{mime};base64,{encoded}"/>')
+    return provider_logo(name)
+
+
 @lru_cache(maxsize=4)
 def provider_logo(name: str) -> str:
     """Iconscout signal-animation previews embedded locally, colours intact."""
-    filename = {"Jio": "jio.png", "Vi": "vi.png", "Airtel": "airtel.png", "BSNL": "bsnl.png"}[name]
+    filename = {"Jio": "jio.png", "Vi": "vi.png", "Airtel": "airtel.png", "BSNL": "bsnl.png"}.get(name, "telecom-churn.png")
     return _logo_image(filename, f"provider-logo logo-{name.lower()}", f"{name} logo")
 
 
 def provider_banner(name: str, state: str) -> str:
     return (f'<div class="provider-artwork artwork-{name.lower()}">'
-            f'<div class="provider-logo-plate">{provider_logo(name)}</div>'
-            '<span class="provider-orbit" aria-hidden="true"></span></div>'
+            f'{provider_animation(name)}</div>'
             f'<div class="provider-caption"><span>{html.escape(name)}</span>'
             f'<small>{html.escape(state)}</small></div>')
 
