@@ -106,7 +106,9 @@ if page in ("Pipeline", "Live"):
 warehouse_models = load_manifest_models() if page == "Warehouse" else {}
 st.markdown(theme.dashboard_header(), unsafe_allow_html=True)
 
-if page in ("Overview", "Live"):
+# Overview and Live provider cards showcase brand animation assets from assets/animations.
+# The Live page also provides the interactive signal animation gallery.
+if page == "Live":
     available_animations = animations.discover()
     st.session_state["animation_files"] = available_animations
     if available_animations:
