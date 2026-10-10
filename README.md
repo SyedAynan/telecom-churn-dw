@@ -298,6 +298,21 @@ This repository implements all modern GitHub repository capabilities:
 
 ## 💻 Quick Start
 
+### Managed Windows and responsive dashboard controls
+
+The dashboard does not deserialize scikit-learn models. Training exports a
+`ml/models/churn_logreg.json` metadata file alongside the joblib pipeline so
+Factors can display coefficients without loading native ML DLLs. Older builds
+without that export show only the five rounded reference coefficients documented
+above, explicitly labeled as a reference. Training and scoring still require an
+environment where Windows permits scikit-learn; application-control settings are
+not changed by the dashboard.
+
+Watchlist filters and customer selection remain outside the one-second refresh
+loop. Only results refresh; the customer selector stays stable as risk changes.
+The risk-distribution chart uses HTML bars instead of reloading an animated iframe
+every second. CSVs are generated on click and warehouse reads use a short cache.
+
 ### Prerequisites
 - Python 3.12+
 - [`uv` package manager](https://docs.astral.sh/uv/)

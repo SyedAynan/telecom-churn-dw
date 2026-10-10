@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, timezone
-from app.assets import icon
+from app.assets import app_icon, icon
 
 # ---- palette --------------------------------------------------------------
 NAVY = "#030305"      # app background
@@ -184,7 +184,7 @@ TOWER = '<svg viewBox="0 0 40 52" fill="none" stroke="currentColor" stroke-width
 
 
 def dashboard_header() -> str:
-    return ('<div class="bi-header"><div class="workspace-mark">' + icon("wifi", "#00d9ff") + '</div><div><h1>Telecom Churn</h1>'
+    return ('<div class="bi-header"><div class="workspace-mark">' + app_icon() + '</div><div><h1>Telecom Churn</h1>'
             '<div class="subline">Customer analytics & retention</div></div>'
             '<div class="header-status"><div class="status-box"><span class="workspace-label">'
             + icon("layer-group", "#00d9ff") + 'CONNECTED WORKSPACE</span><strong>4 providers · One view</strong></div></div></div>')

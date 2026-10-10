@@ -28,7 +28,7 @@ td{color:#d9e8fb}td:last-child,th:last-child{text-align:right}
 """
 
 
-def panel(title: str, body: str, subtitle: str = "") -> str:
+def panel(title: str, body: str, subtitle: str = "", asset: str | None = None) -> str:
     def embed(match):
         svg = match.group()
         classes = re.search(r'class="([^"]+)"', svg)
@@ -39,7 +39,8 @@ def panel(title: str, body: str, subtitle: str = "") -> str:
         svg = svg.replace('fill:white', 'fill:#eeeef3')
         return svg_image(svg, css_class=classes[1] if classes else "chart-image", label=title)
     body = re.sub(r'<svg\b[\s\S]*?</svg>', embed, body)
-    return (f'<section class="panel"><header class="panel-heading"><h3>{html.escape(title)}</h3>'
+    mark = icon(asset, "#00d9ff") if asset else ""
+    return (f'<section class="panel"><header class="panel-heading"><h3>{mark}{html.escape(title)}</h3>'
             f'<p>{html.escape(subtitle)}</p></header>{body}</section>')
 
 
@@ -80,15 +81,15 @@ def contract_donut(base: pd.DataFrame) -> str:
     return panel("Churn by contract", body, "Share of churned customers")
 
 
-def bars(title: str, labels: list, values: list, *, money: bool = False) -> str:
+def bars(title: str, labels: list, values: list, *, money: bool = False, counts: bool = False) -> str:
     maximum = max(max(values, default=0), 0.001)
     body = '<div class="bar-list">'
     for i, (label, value) in enumerate(zip(labels, values)):
-        formatted = f'${value:,.0f}' if money else f'{value:.1%}'
+        formatted = f'{value:,.0f}' if counts else f'${value:,.0f}' if money else f'{value:.1%}'
         body += (f'<div class="bar-item"><div class="bar-label"><span>{html.escape(str(label))}</span>'
                  f'<strong>{formatted}</strong></div><div class="bar-track" aria-hidden="true">'
                  f'<div style="width:{100*value/maximum:.2f}%;background:{COLORS[i%len(COLORS)]}"></div></div></div>')
-    return panel(title, body + '</div>', "Monthly charges · USD" if money else "Observed churn rate by segment")
+    return panel(title, body + '</div>', "Customers by dominant risk factor" if counts else "Monthly charges · USD" if money else "Observed churn rate by segment")
 
 
 def insights(base: pd.DataFrame, summary: pd.DataFrame, simulated: bool = False) -> str:
@@ -100,13 +101,15 @@ def insights(base: pd.DataFrame, summary: pd.DataFrame, simulated: bool = False)
         facts.append(f'<b>{label}</b> customers have <b>{highest.churn_rate:.1%}</b> churn.')
     score_label = "demo risk score" if simulated else "model churn probability"
     facts.append(f'<b>{int((base.risk_band == "high").sum()):,} customers</b> score at least 75% {score_label}.')
-    body = ''.join(f'<div class="insight"><span class="mark">◈</span><span>{fact}</span></div>' for fact in facts)
-    return panel("✧  Key insights", body, "From the simulated scenario" if simulated else "From your warehouse")
+    assets = ["file-check-alt", "chart-line", "credit-card", "users-alt"]
+    body = ''.join(f'<div class="insight"><span class="insight-asset">{icon(asset, "#b39aff")}</span><span>{fact}</span></div>' for fact, asset in zip(facts, assets))
+    return panel("Key insights", body, "From the simulated scenario" if simulated else "From your warehouse", asset="lightbulb-alt")
 
 
 def recommendations() -> str:
     items = ["Review high-risk customers in the Watchlist before planning outreach.", "Explore longer-term contracts for month-to-month customers.", "Prioritize onboarding support during the first year.", "Review billing friction for electronic-check customers."]
-    return panel("◎  Retention opportunities", ''.join(f'<div class="insight"><span class="mark">✓</span><span>{item}</span></div>' for item in items), "Suggested actions · validate with your retention team")
+    assets = ["users-alt", "file-check-alt", "headphones-alt", "credit-card"]
+    return panel("Retention opportunities", ''.join(f'<div class="insight"><span class="insight-asset">{icon(asset, "#22d3bb")}</span><span>{item}</span></div>' for item, asset in zip(items, assets)), "Suggested actions · validate with your retention team", asset="shield-check")
 
 
 def customer_table(base: pd.DataFrame, simulated: bool = False) -> str:

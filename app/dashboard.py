@@ -23,12 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.charts import (  # noqa: E402
     chart_height,
     coefficient_chart,
-    hbar_chart,
     line_chart,
 )
 from app.motion import status_badges  # noqa: E402
-from app import dynamic, live, overview, theme
-from app.assets import icon
+from app import animations, dynamic, live, overview, theme
+from app.assets import app_icon, icon, page_heading
+from app.model_insights import FEATURE_LABELS, load_profile
 from app.providers import PROVIDERS, attach_providers, segment_summary
 from app.simulation import pack_features, read_raw_row  # noqa: E402
 from app.simulator import get_simulator  # noqa: E402
@@ -46,7 +46,7 @@ from etl.paths import DB_PATH, MODELS_DIR  # noqa: E402
 
 st.set_page_config(
     page_title="Telecom Churn DW",
-    page_icon="📡",
+    page_icon=str(Path(__file__).parent / "assets" / "providers" / "app-icon.png"),
     layout="wide",
     initial_sidebar_state="auto",
 )
@@ -76,7 +76,7 @@ def analytics_source(sql: str) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
-    st.markdown(f'<div class="brand"><span class="sidebar-brand-mark">{icon("signal", "#00d9ff")}</span><div>Telecom Churn<small>WAREHOUSE INTELLIGENCE</small></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="brand"><span class="sidebar-brand-mark">{app_icon()}</span><div>Telecom Churn<small>WAREHOUSE INTELLIGENCE</small></div></div>', unsafe_allow_html=True)
     page = st.radio(
         "Section",
         ["Overview", "Pipeline", "Watchlist", "Factors", "Live", "Warehouse"],
@@ -101,11 +101,25 @@ BASE_SQL = """
     FROM marts.churn_predictions p
     JOIN marts.mart_customer_360 m USING (customer_id)
 """
-if page not in ("Overview", "Watchlist"):
-    summary = load_table("SELECT * FROM marts.mart_churn_summary")
-    base = load_table(BASE_SQL)
+if page in ("Pipeline", "Live"):
+    base = analytics_source(BASE_SQL)
 warehouse_models = load_manifest_models() if page == "Warehouse" else {}
 st.markdown(theme.dashboard_header(), unsafe_allow_html=True)
+
+if page in ("Overview", "Live"):
+    available_animations = animations.discover()
+    st.session_state["animation_files"] = available_animations
+    if available_animations:
+        components.html(animations.gallery(available_animations), height=205, scrolling=False)
+
+    @st.fragment(run_every="3s")
+    def watch_animation_downloads() -> None:
+        available = animations.discover()
+        if available != st.session_state.get("animation_files", {}):
+            st.session_state["animation_files"] = available
+            st.rerun()
+
+    watch_animation_downloads()
 
 
 def seg(df: pd.DataFrame, seg_type: str) -> pd.DataFrame:
@@ -183,7 +197,7 @@ if page == "Overview":
     render_overview()
 
 elif page == "Pipeline":
-    st.title("Pipeline walkthrough")
+    st.html(page_heading("Pipeline walkthrough", "exchange", "DATA JOURNEY"))
     st.caption(
         "One real churned customer traced end to end: CSV → ETL → staging → "
         "star schema → 360 mart → model score → served prediction. Every value "
@@ -305,45 +319,55 @@ elif page == "Pipeline":
         )
 
 elif page == "Watchlist":
+    source = analytics_source(BASE_SQL)
+    selected_provider = st.selectbox("Provider", ["All providers", *PROVIDERS], key="watchlist_provider")
+    st.caption("Provider assignments are synthetic demo groups.")
+    st.html(page_heading("High-risk watchlist", "users-alt", "CUSTOMER RETENTION"))
+    st.caption("Customers with risk scores ≥ 75%. Demo mode uses simulated scores and outcomes; warehouse mode uses stored model predictions.")
+    components.html(
+        status_badges([
+            ("WATCHLIST", "err"),
+            ("SIMULATED SCORES" if data_mode == "Simulated live demo" else "SOURCE:churn_predictions", "cyan"),
+            ("GRAIN:customer", "neutral"),
+        ]),
+        height=34,
+    )
+
+    fcol1, fcol2, fcol3, fcol4 = st.columns([1.4, 1, 1, 1])
+    with fcol1:
+        band = st.multiselect(
+            "Risk band",
+            ["high", "medium", "low"],
+            default=["high"],
+        )
+    with fcol2:
+        contracts = sorted(source.contract_label.unique())
+        contract_sel = st.multiselect("Contract", contracts, default=contracts)
+    with fcol3:
+        tenures = ["0-12", "13-24", "25-48", "49-72"]
+        tenure_sel = st.multiselect("Tenure bucket", tenures, default=tenures)
+    with fcol4:
+        min_p = st.slider("Min probability", 0.0, 1.0, 0.0, 0.05)
+
+    cohort = attach_providers(source)
+    if selected_provider != "All providers":
+        cohort = cohort[cohort.provider == selected_provider]
+    selected_customer = st.selectbox(
+        "Customer detail (provider cohort)", ["—"] + sorted(cohort.customer_id.tolist()),
+        key="watchlist_customer",
+        help="Stable customer list; the live risk filters apply to the table below.",
+    )
+
     @st.fragment(run_every="1s" if auto_refresh else None)
     def render_watchlist() -> None:
         base = attach_providers(analytics_frame(analytics_source(BASE_SQL)))
-        st.caption(f"{data_mode} | Updates every second when auto-refresh is enabled.")
-        selected_provider = st.selectbox("Provider", ["All providers", *PROVIDERS], key="watchlist_provider")
         if selected_provider != "All providers":
             base = base[base.provider == selected_provider]
-        st.caption("Provider assignments are synthetic demo groups.")
-        st.title("High-risk watchlist")
-        st.caption("Customers with risk scores ≥ 75%. Demo mode uses simulated scores and outcomes; warehouse mode uses stored model predictions.")
-        components.html(
-            status_badges([
-                ("WATCHLIST", "err"),
-                ("SIMULATED SCORES" if data_mode == "Simulated live demo" else "SOURCE:churn_predictions", "cyan"),
-                ("GRAIN:customer", "neutral"),
-            ]),
-            height=34,
-        )
-
-        fcol1, fcol2, fcol3, fcol4 = st.columns([1.4, 1, 1, 1])
-        with fcol1:
-            band = st.multiselect(
-                "Risk band",
-                ["high", "medium", "low"],
-                default=["high"],
-            )
-        with fcol2:
-            contracts = sorted(base.contract_label.unique())
-            contract_sel = st.multiselect("Contract", contracts, default=contracts)
-        with fcol3:
-            tenures = ["0-12", "13-24", "25-48", "49-72"]
-            tenure_sel = st.multiselect("Tenure bucket", tenures, default=tenures)
-        with fcol4:
-            min_p = st.slider("Min probability", 0.0, 1.0, 0.0, 0.05)
-
+        st.caption(f"{data_mode} | {'Updating every second' if auto_refresh else 'Auto-refresh paused'}")
         view = base[
-            base.risk_band.isin(band or ["high"])
-            & base.contract_label.isin(contract_sel or contracts)
-            & base.tenure_bucket.isin(tenure_sel or tenures)
+            base.risk_band.isin(band)
+            & base.contract_label.isin(contract_sel)
+            & base.tenure_bucket.isin(tenure_sel)
             & (base.churn_probability >= min_p)
         ].sort_values("churn_probability", ascending=False)
 
@@ -366,18 +390,17 @@ elif page == "Watchlist":
             tbl["Data source"] = view.data_source
             tbl["Simulation second"] = view.simulation_second
 
-        st.data_editor(
+        st.dataframe(
             tbl,
-            use_container_width=True,
+            width="stretch",
             height=430,
             column_config={
-                "P(churn)": st.column_config.NumberColumn(format="%.1f%%"),
+                "P(churn)": st.column_config.NumberColumn(format="percent"),
                 "Monthly $": st.column_config.NumberColumn(format="$%.2f"),
                 "Churned?": st.column_config.CheckboxColumn(
                     help="Already churned in this snapshot (Feb 2020)"
                 ),
             },
-            disabled=True,
             key="watchlist_editor",
             hide_index=True,
         )
@@ -396,13 +419,9 @@ elif page == "Watchlist":
             "service check-ins — ordered by probability, explained by the top reason."
         )
 
-        st.markdown("#### Customer drill-through")
-        selected_customer = st.selectbox(
-            "Select a customer from the prediction + 360-mart join",
-            ["—"] + view.customer_id.tolist(),
-        )
-        if selected_customer != "—":
-            detail = base[base.customer_id == selected_customer].iloc[0]
+        customer_rows = base[base.customer_id == selected_customer]
+        if selected_customer != "—" and not customer_rows.empty:
+            detail = customer_rows.iloc[0]
             st.info("Source path: marts.churn_predictions → marts.mart_customer_360 · grain: one row per customer")
             d1, d2, d3, d4 = st.columns(4)
             d1.metric("P(churn)", fmt_pct(detail.churn_probability))
@@ -423,8 +442,7 @@ elif page == "Watchlist":
 
 
 elif page == "Live":
-    st.html('<div class="live-page-heading"><div class="live-eyebrow">SIGNAL INTELLIGENCE</div>'
-            '<h2>Live signals</h2><p>Provider activity &amp; customer review.</p></div>')
+    st.html(page_heading("Live signals", "signal", "SIGNAL INTELLIGENCE"))
     st.caption("SIMULATED STREAM | Synthetic provider groups. Customer profiles and stored predictions: February 2020 warehouse snapshot.")
     provider_col, window_col, feed_col = st.columns([2, 1, 1])
     with provider_col:
@@ -459,7 +477,7 @@ elif page == "Live":
 
 
 elif page == "Warehouse":
-    st.title("Warehouse explorer")
+    st.html(page_heading("Warehouse explorer", "database", "DATA WORKSPACE"))
     st.caption(
         "A read-only window into the warehouse: inspect model grain, lineage, SQL provenance, "
         "and curated query results without bypassing dbt."
@@ -553,40 +571,21 @@ elif page == "Warehouse":
 
 
 elif page == "Factors":
-    st.title("What drives churn")
+    st.html(page_heading("What drives churn", "lightbulb-alt", "PREDICTIVE INSIGHTS"))
     st.caption("Logistic regression on standardized features · AUC 0.835 on holdout · "
                "orange = churn-up, blue = protective")
-
-    import joblib
 
     model_path = MODELS_DIR / "churn_logreg.joblib"
     if not model_path.exists():
         st.warning("No trained model found — run `make train`.")
         st.stop()
-    bundle = joblib.load(model_path)
-    pipe = bundle["pipeline"]
-    coefs = pipe.named_steps["clf"].coef_[0]
-    features = bundle["feature_columns"]
-
-    feat_labels = {
-        "tenure_months": "Tenure (months)",
-        "monthly_charges": "Monthly charges",
-        "total_charges": "Total charges",
-        "is_female": "Female",
-        "is_senior": "Senior citizen",
-        "has_partner": "Has partner",
-        "has_dependents": "Has dependents",
-        "paperless_billing": "Paperless billing",
-        "contract_months": "Contract length",
-        "is_automatic_payment": "Automatic payment",
-        "n_internet": "Internet service",
-        "n_addons": "Add-on services",
-    }
+    features, coefs, profile_status = load_profile(model_path)
+    st.caption(profile_status + " · prediction tables remain warehouse-backed.")
     order = sorted(range(len(coefs)), key=lambda i: abs(coefs[i]), reverse=True)
     components.html(
         coefficient_chart(
             "Model coefficients (standardized)",
-            [feat_labels[features[i]] for i in order],
+            [FEATURE_LABELS.get(features[i], features[i]) for i in order],
             [coefs[i] for i in order],
             subtitle="Sign = direction of churn risk · magnitude = strength",
         ),
@@ -607,17 +606,10 @@ elif page == "Factors":
             .sort_values(ascending=False)
             .head(6)
         )
-        components.html(
-            hbar_chart(
-                "Why customers are risky (medium+high band)",
-                reason_counts.index.tolist(),
-                reason_counts.tolist(),
-                value_fmt="{:,.0f}",
-                subtitle="Count of watchlist customers by dominant risk factor",
-                color_slot=0,
-            ),
-            height=chart_height(len(reason_counts), True),
-        )
+        st.html('<div class="overview-shell">' + overview.bars(
+            "Why customers are risky (medium+high band)",
+            reason_counts.index.tolist(), reason_counts.tolist(), counts=True,
+        ) + '</div>')
 
     render_risk_reasons()
 
