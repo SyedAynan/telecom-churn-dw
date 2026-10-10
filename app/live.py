@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from app.assets import icon, svg_image
+from app.assets import icon, svg_image, provider_banner
 from app.providers import PROVIDERS
 from app.simulator import EVENT_TYPES
 
@@ -67,7 +67,7 @@ def dashboard(events: pd.DataFrame, queue: pd.DataFrame, *, now: float, minutes:
         group = events[events.operator == name]
         count = int(group.event_type.isin(NEGATIVE).sum())
         active = name in providers
-        cards.append(f'<article class="live-provider {"" if active else "muted"}" style="--provider:{color}"><div class="live-provider-top"><span class="live-wordmark brand-{name.lower()}">{name}</span><span>{"IN WINDOW" if active else "FILTERED OUT"}</span></div><div class="live-provider-values"><strong>{len(group):,}<small>events</small></strong><span>{count:,}<small>negative signals</small></span></div></article>')
+        cards.append(f'<article class="live-provider {"" if active else "muted"}" style="--provider:{color}">{provider_banner(name, "IN WINDOW" if active else "FILTERED OUT")}<div class="live-provider-values"><strong>{len(group):,}<small>events</small></strong><span>{count:,}<small>negative signals</small></span></div></article>')
     mix = ''
     for name, label in LABELS.items():
         count = int((events.event_type == name).sum())

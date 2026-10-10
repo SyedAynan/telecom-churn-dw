@@ -28,6 +28,7 @@ from app.charts import (  # noqa: E402
 )
 from app.motion import status_badges  # noqa: E402
 from app import dynamic, live, overview, theme
+from app.assets import icon
 from app.providers import PROVIDERS, attach_providers, segment_summary
 from app.simulation import pack_features, read_raw_row  # noqa: E402
 from app.simulator import get_simulator  # noqa: E402
@@ -75,7 +76,7 @@ def analytics_source(sql: str) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
-    st.markdown(f'<div class="brand">{theme.TOWER}<div>Telecom Churn<small>WAREHOUSE INTELLIGENCE</small></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="brand"><span class="sidebar-brand-mark">{icon("signal", "#00d9ff")}</span><div>Telecom Churn<small>WAREHOUSE INTELLIGENCE</small></div></div>', unsafe_allow_html=True)
     page = st.radio(
         "Section",
         ["Overview", "Pipeline", "Watchlist", "Factors", "Live", "Warehouse"],
@@ -632,5 +633,6 @@ elif page == "Factors":
 # footer hairline — the one place orange appears (at 10%), per ChaiUI
 st.markdown(
     '<div class="chai-footer">telecom churn warehouse · '
-    'csv → etl → duckdb → dbt → model → dashboard</div>',
+    'csv → etl → duckdb → dbt → model → dashboard'
+    '<span class="asset-credit">Icons by <a href="https://iconscout.com/unicons" target="_blank" rel="noopener noreferrer">Iconscout</a></span></div>',
     unsafe_allow_html=True)
