@@ -345,6 +345,11 @@ make all          # Full pipeline: etl -> dbt -> train -> score -> dbt-finish
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
+Third-party artwork has separate terms. Interface icons are [Iconscout Unicons](https://iconscout.com/unicons), bundled with their [license](app/assets/unicons/LICENSE).
+Provider banners use authentic Jio, Vi, Airtel, and BSNL marks from official sites;
+[asset sources and attribution](app/assets/providers/README.md) are included.
+The marks identify synthetic demo groups and do not imply provider endorsement.
+
 <br/>
 
 ## 👨‍💻 Author

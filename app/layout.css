@@ -18,7 +18,7 @@
 [data-testid="stSidebar"] [data-testid="stRadioOption"] p{font-size:13px;line-height:1.5}
 [data-testid="stSidebar"] [data-testid="stRadioOption"]:focus-within{outline:2px solid #00d9ff;outline-offset:2px}
 .sidebar-note{margin-top:6px;border:0;border-top:1px solid var(--edge);border-radius:0;padding:20px 2px;color:var(--muted)}
-.bi-header{margin:0;padding:0 0 22px;display:flex;align-items:center;border-bottom:1px solid var(--edge);gap:16px}
+.bi-header{margin:0;padding:0 0 22px;display:flex;justify-content:flex-start;align-items:center;border-bottom:1px solid var(--edge);gap:16px}
 .bi-header h1{font-size:21px!important;font-weight:600!important;letter-spacing:-.5px!important}
 .bi-header .subline{font-size:12px;color:var(--muted);margin-top:6px}
 .header-status{margin-left:auto}.status-box{min-width:0;border:1px solid var(--edge);padding:9px 12px;background:#ffffff03;box-shadow:none;letter-spacing:.2px}
@@ -82,12 +82,6 @@
 .banner-label>span{font-size:11px;letter-spacing:0;color:#626278}
 .provider-banner .provider-grid{margin-bottom:0}
 .provider-banner .provider-card{background:linear-gradient(145deg,color-mix(in srgb,var(--provider) 5%,#0d0d11),#0d0d11);border-top:2px solid color-mix(in srgb,var(--provider) 60%,transparent)}
-.provider-wordmark{display:flex;align-items:center;justify-content:center;min-height:40px;font-size:24px;font-weight:750;letter-spacing:-1px;color:var(--provider)}
-.provider-wordmark.brand-jio{border-radius:50%;background:#1762de;color:#fff;width:43px;height:43px;font-size:23px;letter-spacing:-1px}
-.provider-wordmark.brand-vi{font-size:32px;color:#ffb938}
-.provider-wordmark.brand-vi:after{content:'!';color:#ff4f79}
-.provider-wordmark.brand-airtel{font-size:25px;font-style:italic;letter-spacing:-1.2px;text-transform:lowercase}
-.provider-wordmark.brand-bsnl{font-size:23px;letter-spacing:1px;font-weight:650}
 .provider-numbers{display:flex;justify-content:space-between;gap:12px;margin-top:18px}
 .provider-numbers strong{font-size:18px;font-weight:500;color:#bdbdcc;font-variant-numeric:tabular-nums}
 .provider-numbers small{display:block;font-size:10px;font-weight:400;color:#727285;margin-top:4px}
@@ -128,10 +122,6 @@
 .live-provider.muted{opacity:.45}
 .live-provider-top{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:32px}
 .live-provider-top>span:last-child{font-size:8px;color:#9292a3}
-.live-wordmark{font-weight:750;font-size:21px;color:var(--provider)}
-.live-wordmark.brand-jio{display:grid;place-items:center;width:34px;height:34px;background:#1762de;color:#fff;border-radius:50%;font-size:19px}
-.live-wordmark.brand-vi{font-size:25px}.live-wordmark.brand-vi:after{content:'!';color:#ff537f}
-.live-wordmark.brand-airtel{text-transform:lowercase;font-style:italic}.live-wordmark.brand-bsnl{font-size:19px}
 .live-provider-values{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:18px;font-variant-numeric:tabular-nums;font-size:20px}
 .live-provider-values strong{font-weight:600}.live-provider-values>span{font-size:17px;color:#babaca;text-align:right}
 .live-provider-values small{display:block;font-size:10px;color:#9292a3;margin-top:5px;font-weight:400}
@@ -158,3 +148,27 @@
 @container(max-width:1000px){.live-kpis,.live-providers{grid-template-columns:repeat(2,minmax(0,1fr))}.live-workspace{grid-template-columns:1fr}.live-feed{height:340px}.live-analysis{gap:22px;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}.live-mix-row{grid-template-columns:118px minmax(20px,1fr) 25px;gap:8px}}
 @container(max-width:650px){.live-analysis{grid-template-columns:1fr;gap:0}.live-kpi{padding:16px}.live-kpi>strong{font-size:28px}.live-provider{padding:14px}.live-provider-top{flex-wrap:wrap}.live-provider-top>span:last-child{font-size:7px}.live-section-heading{gap:8px}.live-section-heading>span{font-size:9px}.live-timeline{height:170px}.live-mix-row{grid-template-columns:132px minmax(20px,1fr) 32px}.live-status>span:last-child{font-size:10px}}
 @container(max-width:650px){.live-shell table{min-width:0;display:block}.live-shell thead{display:none}.live-shell tbody{display:grid;gap:10px}.live-shell tr{display:grid;grid-template-columns:1.5fr .8fr 1fr;border:1px solid #ffffff12;border-radius:8px;padding:12px;background:#101014}.live-shell td{border:0;padding:4px;font-size:11px}.live-shell td:nth-child(2):before{content:'Signals';display:block;font-size:9px;color:#9292a3;margin-bottom:4px}.live-shell td:nth-child(3):before{content:'Priority';display:block;font-size:9px;color:#9292a3;margin-bottom:4px}.live-shell td:last-child{grid-column:1/-1;border-top:1px solid #ffffff12;margin-top:8px;padding-top:10px}}
+
+/* Provider artwork: original marks on neutral plates, neon framing around them. */
+.workspace-mark,.sidebar-brand-mark{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border:1px solid #00d9ff30;border-radius:12px;background:linear-gradient(145deg,#00d9ff14,#00d9ff03)}
+.workspace-mark .ui-icon{width:25px;height:25px}.sidebar-brand-mark{flex-basis:34px;width:34px;height:38px;border-radius:9px}
+.workspace-label{display:flex;align-items:center;gap:7px;font-size:8px;letter-spacing:1px;color:#9da3b6}.workspace-label .ui-icon{width:14px;height:14px}
+.header-status .status-box strong{margin-top:5px;color:#c9cddd}
+.section-icon-label{display:flex;align-items:center;gap:9px}.section-icon-label .ui-icon{width:17px;height:17px}
+.banner-label{align-items:center}.provider-banner{background:linear-gradient(115deg,#101116,#0b0b0f);padding:18px}
+.provider-banner .provider-card,.live-provider{padding:0;overflow:hidden;border:1px solid #ffffff14;border-radius:12px;background:#0d0e13}
+.provider-banner .provider-card.selected{border-color:var(--provider);box-shadow:0 0 0 1px color-mix(in srgb,var(--provider) 20%,transparent)}
+.provider-artwork{height:122px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid #ffffff12;background:radial-gradient(ellipse at 80% 0%,color-mix(in srgb,var(--provider) 20%,transparent),transparent 70%),#11121a}
+.provider-artwork:after{content:'';position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--provider),transparent);opacity:.65}
+.provider-orbit{position:absolute;width:170px;height:170px;right:-65px;top:-95px;border:1px solid color-mix(in srgb,var(--provider) 22%,transparent);border-radius:50%;box-shadow:0 0 0 25px color-mix(in srgb,var(--provider) 4%,transparent)}
+.provider-logo-plate{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:172px;max-width:calc(100% - 32px);height:78px;padding:13px 16px;background:#fff;border-radius:10px;box-shadow:0 5px 20px #0003}
+.provider-logo{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+.provider-logo.logo-jio{height:56px}.provider-logo.logo-vi{height:56px}.provider-logo.logo-airtel{width:128px}.provider-logo.logo-bsnl{width:142px}
+.provider-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 16px 0;font-size:12px;font-weight:600;color:#e1e3ef}
+.provider-caption small{font-size:8px;letter-spacing:.7px;font-weight:500;color:#8f96a9;text-align:right}.selected .provider-caption small{color:var(--provider)}
+.provider-banner .provider-numbers,.live-provider-values{margin:0;padding:15px 16px 18px;align-items:start}.provider-numbers strong{font-size:22px;color:#e1e3ef;font-weight:550}.provider-numbers strong:last-child{text-align:right}.provider-numbers small,.live-provider-values small{font-size:10px;color:#8f96a9}
+.live-providers .provider-artwork{height:108px}.live-providers .provider-logo-plate{height:70px}
+.chai-footer{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;line-height:1.7}.asset-credit a{color:#a9b5c9;text-decoration:none;border-bottom:1px solid #00d9ff40}.asset-credit a:hover{color:#00d9ff}
+@container(max-width:700px){.provider-banner{padding:14px}.provider-banner .provider-card{padding:0}.provider-grid{gap:12px}.provider-caption{padding:13px 12px 0}.provider-caption small{font-size:7px}.provider-banner .provider-numbers,.live-provider-values{padding:12px}.provider-numbers strong{font-size:20px}.provider-artwork{height:110px}}
+@container(max-width:500px){.provider-banner{padding:10px}.provider-banner .provider-card{padding:0}.provider-artwork,.live-providers .provider-artwork{height:94px}.provider-logo-plate,.live-providers .provider-logo-plate{max-width:calc(100% - 20px);height:64px;padding:10px}.provider-logo.logo-jio,.provider-logo.logo-vi{height:46px}.provider-caption{gap:5px;flex-wrap:wrap}.provider-caption small{font-size:6px}.provider-numbers strong{font-size:18px}.provider-numbers small{font-size:9px}}
+@media(max-width:480px){.workspace-mark{width:36px;height:36px;flex-basis:36px;border-radius:9px}.workspace-mark .ui-icon{width:21px;height:21px}.header-status{display:none}.bi-header{gap:11px}}

@@ -6,7 +6,7 @@ import re
 
 import pandas as pd
 from app.providers import PROVIDERS
-from app.assets import icon, svg_image
+from app.assets import icon, svg_image, provider_banner
 
 COLORS = ["#ff237c", "#00d9ff", "#ffb53d", "#ad57ff", "#00efb2"]
 STYLE = """
@@ -123,11 +123,12 @@ def provider_cards(base: pd.DataFrame, selected: str) -> str:
         group = base[base.provider == name]
         rate = f"{group.churned.mean():.1%}" if len(group) else "—"
         cards.append(f'<article class="provider-card {"selected" if selected == name else ""}" style="--provider:{color}">'
-                     f'<div class="provider-name"><span class="provider-wordmark brand-{name.lower()}">{name}</span>'
-                     f'<span class="provider-state">{"SELECTED" if selected == name else "DEMO NETWORK"}</span></div>'
+                     f'{provider_banner(name, "SELECTED" if selected == name else "DEMO GROUP")}'
                      f'<div class="provider-numbers"><strong>{len(group):,}<small>customers</small></strong>'
                      f'<strong>{rate}<small>churn rate</small></strong></div></article>')
-    return '<div class="provider-banner"><div class="banner-label">NETWORK PORTFOLIO<span>Four providers. One view.</span></div><div class="provider-grid">' + ''.join(cards) + '</div></div>'
+    return ('<div class="provider-banner"><div class="banner-label"><div class="section-icon-label">'
+            + icon("signal", "#00d9ff") + 'NETWORK PORTFOLIO</div><span>Four providers. One view.</span></div><div class="provider-grid">'
+            + ''.join(cards) + '</div></div>')
 
 
 def dashboard(base: pd.DataFrame, summary: pd.DataFrame, revenue: pd.DataFrame, *, all_customers: pd.DataFrame | None = None, provider: str = "All providers") -> str:
