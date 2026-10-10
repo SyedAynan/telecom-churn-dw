@@ -1,0 +1,8 @@
+# Neon-black dashboard theme, including native Streamlit widgets.
+[theme]
+base = "dark"
+primaryColor = "#00d9ff"
+backgroundColor = "#030305"
+secondaryBackgroundColor = "#101015"
+textColor = "#e8f1ff"
+font = "sans serif"

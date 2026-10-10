@@ -9,6 +9,15 @@ sources:
           Landing table loaded by etl/load.py. One row per customer.
           Timestamp-free snapshot of the Feb-2020 IBM Telco sample.
 
+  # Predictions are written by ml/score.py after the first dbt pass. Keeping
+  # them as a source makes the dependency explicit while allowing the scoring
+  # job to own the table's write lifecycle.
+  - name: ml_outputs
+    schema: marts
+    tables:
+      - name: churn_predictions
+        description: One row per customer written by the churn scoring job.
+
 models:
   - name: stg_telco_churn
     description: Typed, snake_case staging view of the raw landing table.
