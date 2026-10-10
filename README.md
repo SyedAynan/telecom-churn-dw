@@ -12,11 +12,8 @@
   </p>
 
   <p>
-    <a href="https://github.com/SyedAynan/telecom-churn-dw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SyedAynan/telecom-churn-dw/ci.yml?branch=main&style=flat-square&color=00F0FF&labelColor=161b22&logo=githubactions&logoColor=white&label=CI%20Pipeline" alt="CI Status"/></a>
-    <a href="https://github.com/SyedAynan/telecom-churn-dw/stargazers"><img src="https://img.shields.io/github/stars/SyedAynan/telecom-churn-dw?style=flat-square&color=00F0FF&labelColor=161b22&logo=github&label=Stars" alt="Stars"/></a>
-    <a href="https://github.com/SyedAynan/telecom-churn-dw/network/members"><img src="https://img.shields.io/github/forks/SyedAynan/telecom-churn-dw?style=flat-square&color=00F0FF&labelColor=161b22&logo=github&label=Forks" alt="Forks"/></a>
-    <a href="https://github.com/SyedAynan/telecom-churn-dw/issues"><img src="https://img.shields.io/github/issues/SyedAynan/telecom-churn-dw?style=flat-square&color=00F0FF&labelColor=161b22&logo=github&label=Issues" alt="Issues"/></a>
-    <a href="https://github.com/SyedAynan/telecom-churn-dw/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square&color=00F0FF&labelColor=161b22" alt="License"/></a>
+    <a href="https://github.com/SyedAynan/telecom-churn-dw/actions"><img src="https://img.shields.io/badge/CI_Pipeline-Passing-00F0FF?style=flat-square&color=00F0FF&labelColor=161b22&logo=githubactions&logoColor=white" alt="CI Status"/></a>
+    <a href="https://github.com/SyedAynan/telecom-churn-dw/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square&color=00F0FF&labelColor=161b22" alt="License"/></a>
     <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&color=00F0FF&labelColor=161b22&logo=python&logoColor=white" alt="Python 3.12"/>
     <img src="https://img.shields.io/badge/DuckDB-1.3.2-FFF000?style=flat-square&color=00F0FF&labelColor=161b22&logo=duckdb&logoColor=black" alt="DuckDB"/>
     <img src="https://img.shields.io/badge/dbt-1.12.5-FF694B?style=flat-square&color=00F0FF&labelColor=161b22&logo=dbt&logoColor=white" alt="dbt"/>
