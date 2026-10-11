@@ -356,7 +356,7 @@ make all          # Full pipeline: etl -> dbt -> train -> score -> dbt-finish
 
 <br/>
 
-## 📄 License
+## 📄 License & Academic Integrity
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
@@ -367,12 +367,28 @@ The marks identify synthetic demo groups and do not imply provider endorsement.
 
 <br/>
 
+---
+
+## ⚖️ Copyright, Attribution & Academic Integrity
+
+**Copyright (c) 2026 Syed Ayan. All rights reserved.**
+
+> ### 🎓 Notice Regarding Academic Submissions & Plagiarism
+> This repository represents original data warehousing, machine learning, and analytical portfolio work created by **Syed Ayan**.
+>
+> - **Evaluation & Portfolio Use:** This codebase and data pipeline are publicly visible for prospective employers, technical recruiters, peer review, and individual educational study.
+> - **Prohibition of Plagiarized Academic Submission:** You may **not** submit this project, its data models, dbt DAGs, ML pipeline, or substantial portions of its code/documentation as your own academic assignment, course project, dissertation, or degree requirement at any school, college, or university. Doing so violates institutional academic integrity policies and honor codes.
+> - **Open-Source Terms:** Software distribution rights remain subject to the terms of the included [MIT License](LICENSE), requiring mandatory preservation of original copyright notices and author attribution.
+> - **Third-Party Rights:** All third-party libraries, vendor marks, and dataset origins remain subject to their respective licenses and terms.
+
+<br/>
+
 ## 👨‍💻 Author
 
 <div align="center">
 
   <h3>Syed Ayan</h3>
-  <p><strong>Full Stack & Web3 Developer &bull; Data Systems Engineer</strong></p>
+  <p><strong>Computer Science (Data Science) Student &bull; Data Systems & ML Builder</strong></p>
 
   <a href="https://github.com/SyedAynan">
     <img src="https://img.shields.io/badge/GitHub-SyedAynan-161b22?style=flat-square&logo=github&logoColor=white" alt="GitHub"/>
